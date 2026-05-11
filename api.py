@@ -232,5 +232,17 @@ def create_app() -> web.Application:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-    app.router.add_prefix("/api")
+    async def index(request):
+        return web.FileResponse(
+            os.path.join(FRONTEND_DIR, "index.html")
+        )
+
+    app.router.add_get("/", index)
+
+    app.router.add_static(
+        "/static",
+        path=FRONTEND_DIR,
+        show_index=False
+        )
+
     return app
