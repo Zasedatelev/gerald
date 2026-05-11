@@ -6,16 +6,13 @@
 import os
 
 # ── Бот ──────────────────────────────────────
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8740049939:AAGNWwk7CrFYUqP6tHipuRW-ZzlofBMCvdw")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # ── URL Mini App (HTTPS!) ─────────────────────
-MINI_APP_URL = os.getenv("MINI_APP_URL", "https://frontend-one-ochre-80.vercel.app")
+MINI_APP_URL = os.getenv("MINI_APP_URL")
     
 # ── PostgreSQL ────────────────────────────────
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:260616@localhost:5432/heraldry",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ── JWT ──────────────────────────────────────
 JWT_SECRET  = os.getenv("JWT_SECRET", "change_me_in_production_very_long_secret")

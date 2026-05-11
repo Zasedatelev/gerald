@@ -301,12 +301,27 @@ const LABELS = ['A','B','C','D','E']; // до 5 вариантов ответа
 
 // ── API ───────────────────────────────────────
 async function api(path, opts={}){
-  const h = {'Content-Type':'application/json'};
-  if(token) h['Authorization']='Bearer '+token;
-  const r = await fetch(API+path,{...opts,headers:h});
-  const d = await r.json();
-  if(!r.ok) throw new Error(d.detail||'Ошибка');
-  return d;
+  const h = { 'Content-Type': 'application/json' };
+  if (token) {
+    h['Authorization'] = 'Bearer ' + token;
+  }
+  const r = await fetch(`${API}/api${path}`, {
+    ...opts,
+    headers: h
+  });
+
+  let d = {};
+
+  try {
+    d = await r.json();
+  } catch {
+    throw new Error('Server error');
+  }
+
+  if (!r.ok) {
+    throw new Error(d.detail || 'Ошибка');
+  }
+  return d
 }
 
 // ── VIEWS ─────────────────────────────────────
