@@ -80,6 +80,7 @@ async def main():
     await site.start()
     log.info("API server started on %s:%s", API_HOST, API_PORT)
 
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
     await runner.cleanup()
