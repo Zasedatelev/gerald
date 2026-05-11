@@ -232,5 +232,5 @@ def create_app() -> web.Application:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-    app.router.add_static("/", path=FRONTEND_DIR, name="static", show_index=True)
+    app.router.add_prefix("/api")
     return app
