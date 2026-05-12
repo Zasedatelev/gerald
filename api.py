@@ -122,7 +122,7 @@ async def login(request: web.Request) -> web.Response:
 
 # ── Directions ────────────────────────────────
 
-@require_auth
+
 async def get_directions(request: web.Request) -> web.Response:
     dirs = await db.get_directions()
     return ok([{"id": d["id"], "slug": d["slug"], "title": d["title"]} for d in dirs])
@@ -130,7 +130,7 @@ async def get_directions(request: web.Request) -> web.Response:
 
 # ── Tickets ───────────────────────────────────
 
-@require_auth
+
 async def get_tickets(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
@@ -142,7 +142,7 @@ async def get_tickets(request: web.Request) -> web.Response:
 
 # ── Questions (single ticket) ─────────────────
 
-@require_auth
+
 async def get_questions(request: web.Request) -> web.Response:
     ticket_id = int(request.match_info["ticket_id"])
     questions = await db.get_ticket_questions(ticket_id)
@@ -151,7 +151,7 @@ async def get_questions(request: web.Request) -> web.Response:
 
 # ── Questions (all in direction) ──────────────
 
-@require_auth
+
 async def get_all_questions(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
@@ -166,7 +166,7 @@ async def get_all_questions(request: web.Request) -> web.Response:
 
 # ── Random ticket (for exam mode) ────────────
 
-@require_auth
+
 async def get_random_ticket_questions(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
