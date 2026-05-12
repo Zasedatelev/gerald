@@ -298,30 +298,24 @@ let answers  = [];     // { text, correct }
 let mode     = '';
 let answered = false;
 const LABELS = ['A','B','C','D','E']; // до 5 вариантов ответа
+const PASS_PERCENT = 100; // проходной балл — должен совпадать с config.py
 
 // ── API ───────────────────────────────────────
 async function api(path, opts={}){
-  const h = { 'Content-Type': 'application/json' };
-  if (token) {
-    h['Authorization'] = 'Bearer ' + token;
+  const h = {'Content-Type':'application/json'};
+  if(token) h['Authorization']='Bearer '+token;
+  let r;
+  try{
+    r = await fetch(API+path,{...opts,headers:h});
+  }catch(netErr){
+    throw new Error('Нет соединения: '+netErr.message);
   }
-  const r = await fetch(`${API}/api${path}`, {
-    ...opts,
-    headers: h
-  });
-
-  let d = {};
-
-  try {
-    d = await r.json();
-  } catch {
-    throw new Error('Server error');
-  }
-
-  if (!r.ok) {
-    throw new Error(d.detail || 'Ошибка');
-  }
-  return d
+  const text = await r.text();
+  let body;
+  try{ body = JSON.parse(text); }
+  catch(_){ throw new Error('Ошибка сервера ('+r.status+'): '+text.slice(0,100)); }
+  if(!r.ok) throw new Error(body.error || body.detail || 'Ошибка '+r.status);
+  return body;
 }
 
 // ── VIEWS ─────────────────────────────────────
@@ -480,7 +474,7 @@ function nextQ(){ qi++; qi<flat.length ? renderQ() : showResult(); }
 // ── RESULT ────────────────────────────────────
 async function showResult(){
   const total=flat.length, correct=answers.filter(a=>a.correct).length;
-  const pct=Math.round(correct/total*100), passed=pct>=60;
+  const pct=Math.round(correct/total*100), passed=pct>=PASS_PERCENT;
 
   document.getElementById('prog').style.width='100%';
   document.getElementById('prog-lbl').textContent=`${total} / ${total}`;
@@ -503,7 +497,7 @@ async function showResult(){
   document.getElementById('r-meta').innerHTML=
     `Режим: <b style="color:var(--text)">${mL[mode]||mode}</b><br/>`+
     (curDir?`Направление: <b style="color:var(--text)">${curDir.title}</b><br/>`:'')+ 
-    `Проходной балл: 60%`;
+    `Проходной балл: ${PASS_PERCENT}%`;
 
   document.getElementById('r-review').innerHTML=answers.map((a,i)=>`
     <div class="rev">
@@ -530,7 +524,7 @@ async function loadHistory(){
     const rows=await api('/history');
     if(!rows.length){el.innerHTML='<div class="loader">Нет записей</div>';return;}
     el.innerHTML=rows.map(r=>{
-      const pct=Math.round(r.correct/r.total*100), ok=pct>=60;
+      const pct=Math.round(r.correct/r.total*100), ok=pct>=PASS_PERCENT;
       const dt=new Date(r.finished_at).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
       const dir=r.direction_title||'Экзамен';
       const tkt=r.ticket_number?` · Билет ${r.ticket_number}`:'';

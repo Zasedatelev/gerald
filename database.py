@@ -39,27 +39,6 @@ async def create_user(telegram_id: int, password_hash: str) -> int:
     )
 
 
-# ── Сессии ────────────────────────────────────
-
-async def save_session(user_id: int, token: str, expires_at):
-    pool = await get_pool()
-    await pool.execute(
-        "INSERT INTO sessions(user_id, token, expires_at) VALUES($1,$2,$3) "
-        "ON CONFLICT(token) DO NOTHING",
-        user_id, token, expires_at,
-    )
-
-
-async def get_session(token: str) -> asyncpg.Record | None:
-    pool = await get_pool()
-    return await pool.fetchrow(
-        "SELECT s.*, u.telegram_id FROM sessions s "
-        "JOIN users u ON u.id = s.user_id "
-        "WHERE s.token=$1 AND s.expires_at > NOW()",
-        token,
-    )
-
-
 # ── Направления ───────────────────────────────
 
 async def get_directions() -> list[asyncpg.Record]:

@@ -19,8 +19,6 @@ from aiohttp import web
 
 import auth
 import database as db
-import os
-
 
 # ── Middleware: авторизация ────────────────────
 
@@ -99,8 +97,7 @@ async def register(request: web.Request) -> web.Response:
 
     pw_hash = auth.hash_password(password)
     user_id = await db.create_user(tg_id, pw_hash)
-    token, expires = auth.create_token(user_id, tg_id)
-    await db.save_session(user_id, token, expires)
+    token, _ = auth.create_token(user_id, tg_id)
 
     return ok({"token": token, "user_id": user_id})
 
@@ -114,15 +111,14 @@ async def login(request: web.Request) -> web.Response:
     if not user or not auth.verify_password(password, user["password"]):
         return err(401, "Неверный ID или пароль")
 
-    token, expires = auth.create_token(user["id"], tg_id)
-    await db.save_session(user["id"], token, expires)
+    token, _ = auth.create_token(user["id"], tg_id)
 
     return ok({"token": token, "user_id": user["id"]})
 
 
 # ── Directions ────────────────────────────────
 
-
+@require_auth
 async def get_directions(request: web.Request) -> web.Response:
     dirs = await db.get_directions()
     return ok([{"id": d["id"], "slug": d["slug"], "title": d["title"]} for d in dirs])
@@ -130,7 +126,7 @@ async def get_directions(request: web.Request) -> web.Response:
 
 # ── Tickets ───────────────────────────────────
 
-
+@require_auth
 async def get_tickets(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
@@ -142,7 +138,7 @@ async def get_tickets(request: web.Request) -> web.Response:
 
 # ── Questions (single ticket) ─────────────────
 
-
+@require_auth
 async def get_questions(request: web.Request) -> web.Response:
     ticket_id = int(request.match_info["ticket_id"])
     questions = await db.get_ticket_questions(ticket_id)
@@ -151,7 +147,7 @@ async def get_questions(request: web.Request) -> web.Response:
 
 # ── Questions (all in direction) ──────────────
 
-
+@require_auth
 async def get_all_questions(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
@@ -166,7 +162,7 @@ async def get_all_questions(request: web.Request) -> web.Response:
 
 # ── Random ticket (for exam mode) ────────────
 
-
+@require_auth
 async def get_random_ticket_questions(request: web.Request) -> web.Response:
     slug = request.match_info["slug"]
     d = await db.get_direction_by_slug(slug)
@@ -218,31 +214,18 @@ async def get_history(request: web.Request) -> web.Response:
 def create_app() -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app.router.add_route("OPTIONS", "/{path_info:.*}", lambda r: web.Response())
+    # Healthcheck для Render
+    app.router.add_get("/",                           lambda r: web.Response(text="ok"))
     app.router.add_post("/api/auth/register",         register)
     app.router.add_post("/api/auth/login",            login)
     app.router.add_get ("/api/directions",            get_directions)
     app.router.add_get ("/api/tickets/{slug}",        get_tickets)
-    app.router.add_get ("/api/questions/{ticket_id}", get_questions)
+    # ВАЖНО: /all/{slug} должен быть зарегистрирован ДО /{ticket_id}
+    # иначе aiohttp матчит "all" как ticket_id и падает при int()
     app.router.add_get ("/api/questions/all/{slug}",  get_all_questions)
+    app.router.add_get ("/api/questions/{ticket_id}", get_questions)
     app.router.add_get ("/api/random/{slug}",         get_random_ticket_questions)
     app.router.add_post("/api/result",                save_result)
     app.router.add_get ("/api/history",               get_history)
-
-    # Раздаём frontend/index.html по корню
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
-
-    async def index(request):
-        return web.FileResponse(
-            os.path.join(FRONTEND_DIR, "index.html")
-        )
-
-    app.router.add_get("/", index)
-
-    app.router.add_static(
-        "/static",
-        path=FRONTEND_DIR,
-        show_index=False
-        )
 
     return app

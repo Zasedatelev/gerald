@@ -42,15 +42,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Сессии (JWT-токены для Mini App)
-CREATE TABLE IF NOT EXISTS sessions (
-    id         SERIAL PRIMARY KEY,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token      VARCHAR(512) UNIQUE NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- Результаты тестирования
 CREATE TABLE IF NOT EXISTS results (
     id           SERIAL PRIMARY KEY,
