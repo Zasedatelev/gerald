@@ -84,36 +84,47 @@ def shuffle_answers(questions: list[dict]) -> list[dict]:
 # ── Auth ──────────────────────────────────────
 
 async def register(request: web.Request) -> web.Response:
-    body = await request.json()
-    tg_id    = int(body.get("telegram_id", 0))
-    password = body.get("password", "").strip()
+    try:
+        body = await request.json()
+        tg_id    = int(body.get("telegram_id", 0))
+        password = body.get("password", "").strip()
 
-    if not tg_id or len(password) < 4:
-        return err(400, "telegram_id и пароль (мин. 4 символа) обязательны")
+        if not tg_id or len(password) < 4:
+            return err(400, "telegram_id и пароль (мин. 4 символа) обязательны")
 
-    existing = await db.get_user_by_tg(tg_id)
-    if existing:
-        return err(409, "Пользователь уже зарегистрирован")
+        existing = await db.get_user_by_tg(tg_id)
+        if existing:
+            return err(409, "Пользователь уже зарегистрирован")
 
-    pw_hash = auth.hash_password(password)
-    user_id = await db.create_user(tg_id, pw_hash)
-    token, _ = auth.create_token(user_id, tg_id)
+        pw_hash = auth.hash_password(password)
+        user_id = await db.create_user(tg_id, pw_hash)
+        token, _ = auth.create_token(user_id, tg_id)
+        
 
-    return ok({"token": token, "user_id": user_id})
+        return ok({"token": token, "user_id": user_id})
+
+    except Exception as e:
+        print("REGISTER ERROR:", repr(e))
+        return err(500, str(e))
 
 
 async def login(request: web.Request) -> web.Response:
-    body = await request.json()
-    tg_id    = int(body.get("telegram_id", 0))
-    password = body.get("password", "").strip()
+    try:
+        body = await request.json()
+        tg_id    = int(body.get("telegram_id", 0))
+        password = body.get("password", "").strip()
 
-    user = await db.get_user_by_tg(tg_id)
-    if not user or not auth.verify_password(password, user["password"]):
-        return err(401, "Неверный ID или пароль")
+        user = await db.get_user_by_tg(tg_id)
+        if not user or not auth.verify_password(password, user["password"]):
+            return err(401, "Неверный ID или пароль")
 
-    token, _ = auth.create_token(user["id"], tg_id)
+        token, _ = auth.create_token(user["id"], tg_id)
 
-    return ok({"token": token, "user_id": user["id"]})
+        return ok({"token": token, "user_id": user["id"]})
+
+    except Exception as e:
+        print("LOGIN ERROR:", repr(e))
+        return err(500, str(e))
 
 
 # ── Directions ────────────────────────────────
@@ -195,7 +206,7 @@ async def save_result(request: web.Request) -> web.Response:
         return err(400, "Неверный mode")
 
     rid = await db.save_result(
-        user["sub"], direction_id, ticket_id, mode, correct, total
+        int(user["sub"]), direction_id, ticket_id, mode, correct, total
     )
     return ok({"result_id": rid})
 
@@ -205,7 +216,7 @@ async def save_result(request: web.Request) -> web.Response:
 @require_auth
 async def get_history(request: web.Request) -> web.Response:
     user = request["user"]
-    rows = await db.get_history(user["sub"])
+    rows = await db.get_history(int(user["sub"]))
     return ok([dict(r) for r in rows])
 
 

@@ -24,7 +24,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_token(user_id: int, telegram_id: int) -> tuple[str, datetime.datetime]:
     expires = datetime.datetime.utcnow() + datetime.timedelta(hours=JWT_EXPIRES)
     payload = {
-        "sub": user_id,
+        "sub": str(user_id),
         "tg":  telegram_id,
         "exp": expires,
     }
@@ -35,5 +35,6 @@ def create_token(user_id: int, telegram_id: int) -> tuple[str, datetime.datetime
 def decode_token(token: str) -> dict | None:
     try:
         return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except jwt.PyJWTError:
+    except Exception as e:
+        print("JWT ERROR:", repr(e))
         return None
