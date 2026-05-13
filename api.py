@@ -24,15 +24,35 @@ import database as db
 
 @web.middleware
 async def cors_middleware(request: web.Request, handler):
+
     if request.method == "OPTIONS":
-        return web.Response(headers={
-            "Access-Control-Allow-Origin":  "*",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        })
-    resp = await handler(request)
+        return web.Response(
+            status=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+
+    try:
+        resp = await handler(request)
+    except Exception as e:
+        print("SERVER ERROR:", repr(e))
+        return web.json_response(
+            {"error": str(e)},
+            status=500,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
+
     resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Headers"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+
     return resp
 
 
