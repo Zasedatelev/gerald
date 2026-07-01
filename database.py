@@ -11,7 +11,6 @@ _pool: asyncpg.Pool | None = None
 async def create_pool():
     global _pool
     _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
-    print(DATABASE_URL)
 
 
 async def get_pool() -> asyncpg.Pool:
@@ -38,6 +37,7 @@ async def create_user(telegram_id: int, password_hash: str) -> int:
         "INSERT INTO users(telegram_id, password) VALUES($1,$2) RETURNING id",
         telegram_id, password_hash,
     )
+
 
 
 # ── Направления ───────────────────────────────

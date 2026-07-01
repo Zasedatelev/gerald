@@ -24,35 +24,15 @@ import database as db
 
 @web.middleware
 async def cors_middleware(request: web.Request, handler):
-
     if request.method == "OPTIONS":
-        return web.Response(
-            status=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Credentials": "true",
-            }
-        )
-
-    try:
-        resp = await handler(request)
-    except Exception as e:
-        print("SERVER ERROR:", repr(e))
-        return web.json_response(
-            {"error": str(e)},
-            status=500,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-            }
-        )
-
+        return web.Response(headers={
+            "Access-Control-Allow-Origin":  "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        })
+    resp = await handler(request)
     resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    resp.headers["Access-Control-Allow-Credentials"] = "true"
-
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return resp
 
 
@@ -104,47 +84,36 @@ def shuffle_answers(questions: list[dict]) -> list[dict]:
 # ── Auth ──────────────────────────────────────
 
 async def register(request: web.Request) -> web.Response:
-    try:
-        body = await request.json()
-        tg_id    = int(body.get("telegram_id", 0))
-        password = body.get("password", "").strip()
+    body = await request.json()
+    tg_id    = int(body.get("telegram_id", 0))
+    password = body.get("password", "").strip()
 
-        if not tg_id or len(password) < 4:
-            return err(400, "telegram_id и пароль (мин. 4 символа) обязательны")
+    if not tg_id or len(password) < 4:
+        return err(400, "telegram_id и пароль (мин. 4 символа) обязательны")
 
-        existing = await db.get_user_by_tg(tg_id)
-        if existing:
-            return err(409, "Пользователь уже зарегистрирован")
+    existing = await db.get_user_by_tg(tg_id)
+    if existing:
+        return err(409, "Пользователь уже зарегистрирован")
 
-        pw_hash = auth.hash_password(password)
-        user_id = await db.create_user(tg_id, pw_hash)
-        token, _ = auth.create_token(user_id, tg_id)
-        
+    pw_hash = auth.hash_password(password)
+    user_id = await db.create_user(tg_id, pw_hash)
+    token, _ = auth.create_token(user_id, tg_id)
 
-        return ok({"token": token, "user_id": user_id})
-
-    except Exception as e:
-        print("REGISTER ERROR:", repr(e))
-        return err(500, str(e))
+    return ok({"token": token, "user_id": user_id})
 
 
 async def login(request: web.Request) -> web.Response:
-    try:
-        body = await request.json()
-        tg_id    = int(body.get("telegram_id", 0))
-        password = body.get("password", "").strip()
+    body = await request.json()
+    tg_id    = int(body.get("telegram_id", 0))
+    password = body.get("password", "").strip()
 
-        user = await db.get_user_by_tg(tg_id)
-        if not user or not auth.verify_password(password, user["password"]):
-            return err(401, "Неверный ID или пароль")
+    user = await db.get_user_by_tg(tg_id)
+    if not user or not auth.verify_password(password, user["password"]):
+        return err(401, "Неверный ID или пароль")
 
-        token, _ = auth.create_token(user["id"], tg_id)
+    token, _ = auth.create_token(user["id"], tg_id)
 
-        return ok({"token": token, "user_id": user["id"]})
-
-    except Exception as e:
-        print("LOGIN ERROR:", repr(e))
-        return err(500, str(e))
+    return ok({"token": token, "user_id": user["id"]})
 
 
 # ── Directions ────────────────────────────────
@@ -226,7 +195,7 @@ async def save_result(request: web.Request) -> web.Response:
         return err(400, "Неверный mode")
 
     rid = await db.save_result(
-        int(user["sub"]), direction_id, ticket_id, mode, correct, total
+        user["sub"], direction_id, ticket_id, mode, correct, total
     )
     return ok({"result_id": rid})
 
@@ -236,7 +205,7 @@ async def save_result(request: web.Request) -> web.Response:
 @require_auth
 async def get_history(request: web.Request) -> web.Response:
     user = request["user"]
-    rows = await db.get_history(int(user["sub"]))
+    rows = await db.get_history(user["sub"])
     return ok([dict(r) for r in rows])
 
 
@@ -245,14 +214,13 @@ async def get_history(request: web.Request) -> web.Response:
 def create_app() -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
     app.router.add_route("OPTIONS", "/{path_info:.*}", lambda r: web.Response())
-    # Healthcheck для Render
+    # Healthcheck — Amvera проверяет доступность сервиса
     app.router.add_get("/",                           lambda r: web.Response(text="ok"))
     app.router.add_post("/api/auth/register",         register)
     app.router.add_post("/api/auth/login",            login)
     app.router.add_get ("/api/directions",            get_directions)
     app.router.add_get ("/api/tickets/{slug}",        get_tickets)
-    # ВАЖНО: /all/{slug} должен быть зарегистрирован ДО /{ticket_id}
-    # иначе aiohttp матчит "all" как ticket_id и падает при int()
+    # /all/{slug} ОБЯЗАТЕЛЬНО перед /{ticket_id} — иначе aiohttp матчит "all" как ticket_id
     app.router.add_get ("/api/questions/all/{slug}",  get_all_questions)
     app.router.add_get ("/api/questions/{ticket_id}", get_questions)
     app.router.add_get ("/api/random/{slug}",         get_random_ticket_questions)
