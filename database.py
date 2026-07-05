@@ -1,16 +1,45 @@
 """
 Работа с PostgreSQL через asyncpg.
+Подключение через отдельные параметры (host/port/user/db)
+на случай если Amvera не передаёт полный DSN.
 """
 
 import asyncpg
-from config import DATABASE_URL
+from config import DB_HOST, DB_PORT, DB_USER, DB_NAME, DB_PASS, DATABASE_URL
 
 _pool: asyncpg.Pool | None = None
 
 
 async def create_pool():
     global _pool
-    _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    # Пробуем сначала через DSN, если не получится — через параметры
+    try:
+        if DATABASE_URL and DATABASE_URL.startswith(("postgresql://", "postgres://")):
+            _pool = await asyncpg.create_pool(
+                DATABASE_URL,
+                min_size=2,
+                max_size=10,
+            )
+        else:
+            raise ValueError("DSN не подходит, используем параметры")
+    except Exception as e1:
+        import logging
+        logging.warning("DSN подключение не удалось (%s), пробуем через параметры...", e1)
+        try:
+            kwargs = dict(
+                host=DB_HOST,
+                port=DB_PORT,
+                user=DB_USER,
+                database=DB_NAME,
+                min_size=2,
+                max_size=10,
+            )
+            if DB_PASS:
+                kwargs["password"] = DB_PASS
+            _pool = await asyncpg.create_pool(**kwargs)
+        except Exception as e2:
+            logging.error("Подключение через параметры тоже не удалось: %s", e2)
+            raise
 
 
 async def get_pool() -> asyncpg.Pool:
@@ -37,7 +66,6 @@ async def create_user(telegram_id: int, password_hash: str) -> int:
         "INSERT INTO users(telegram_id, password) VALUES($1,$2) RETURNING id",
         telegram_id, password_hash,
     )
-
 
 
 # ── Направления ───────────────────────────────
@@ -73,7 +101,6 @@ async def get_random_ticket(direction_id: int) -> asyncpg.Record | None:
 # ── Вопросы + ответы ──────────────────────────
 
 async def get_ticket_questions(ticket_id: int) -> list[dict]:
-    """Возвращает вопросы билета вместе со списком ответов."""
     pool = await get_pool()
     rows = await pool.fetch(
         """
@@ -90,7 +117,6 @@ async def get_ticket_questions(ticket_id: int) -> list[dict]:
         """,
         ticket_id,
     )
-
     questions: dict[int, dict] = {}
     for r in rows:
         if r["q_id"] not in questions:
@@ -105,12 +131,10 @@ async def get_ticket_questions(ticket_id: int) -> list[dict]:
             "text": r["a_text"],
             "is_correct": r["is_correct"],
         })
-
     return list(questions.values())
 
 
 async def get_all_tickets_questions(direction_id: int) -> list[dict]:
-    """Все вопросы направления, сгруппированные по билетам."""
     pool = await get_pool()
     tickets = await get_tickets_by_direction(direction_id)
     result = []
