@@ -285,10 +285,10 @@ if(tg){ tg.ready(); tg.expand(); tg.setHeaderColor('#0e0e12'); tg.setBackgroundC
 
 // ── CONFIG ────────────────────────────────────
 // URL FastAPI. Если фронт и API на одном хосте — window.location.origin.
-// Иначе укажите явно: const API = 'https://testappgerald-olegz2026.amvera.io/api';
+// Иначе укажите явно: const API = 'https://testappgerald-olegz2026.amvera.io';
 // ⚠️  Замените на URL вашего бэкенд-проекта на Amvera
 // Пример: https://quiz-api-ваш-логин.amvera.io
-const API = 'https://testappgerald-olegz2026.amvera.io';
+const API = 'https://BACKEND_PROJECT.amvera.io';
 
 // ── STATE ─────────────────────────────────────
 let token    = localStorage.getItem('qt') || '';
@@ -343,7 +343,7 @@ async function doLogin(){
   if(!pass){authErr('Введите пароль');return;}
   const tgid=parseInt(raw,10);
   try{
-    const d=await api('/auth/login',{method:'POST',body:JSON.stringify({telegram_id:tgid,password:pass})});
+    const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({telegram_id:tgid,password:pass})});
     token=d.token; localStorage.setItem('qt',token); await initHome();
   }catch(e){authErr(e.message);}
 }
@@ -355,7 +355,7 @@ async function doRegister(){
   if(pass.length<4){authErr('Пароль минимум 4 символа');return;}
   const tgid=parseInt(raw,10);
   try{
-    const d=await api('/auth/register',{method:'POST',body:JSON.stringify({telegram_id:tgid,password:pass})});
+    const d=await api('/api/auth/register',{method:'POST',body:JSON.stringify({telegram_id:tgid,password:pass})});
     token=d.token; localStorage.setItem('qt',token); await initHome();
   }catch(e){authErr(e.message);}
 }
@@ -372,7 +372,7 @@ function togglePass(){
 const ICONS={legal:'⚖️',political:'🏛',fire:'🔫',tactical:'🪖'};
 async function initHome(){
   show('v-home');
-  dirs=await api('/directions');
+  dirs=await api('/api/directions');
   document.getElementById('dir-list').innerHTML=dirs.map(d=>`
     <div class="dir-card" onclick="openDir(${d.id},'${d.slug}','${d.title.replace(/'/g,"\\'")}')">
       <div class="dir-icon">${ICONS[d.slug]||'📋'}</div>
@@ -388,7 +388,7 @@ async function initHome(){
 async function openDir(id,slug,title){
   curDir={id,slug,title};
   document.getElementById('dir-title').textContent=title;
-  const tickets=await api(`/tickets/${slug}`);
+  const tickets=await api(`/api/tickets/${slug}`);
   document.getElementById('tkt-grid').innerHTML=tickets.map(t=>
     `<button class="tkt-btn" onclick="startTicket(${t.id})">${t.number}</button>`
   ).join('');
@@ -398,21 +398,21 @@ async function openDir(id,slug,title){
 // ── START MODES ───────────────────────────────
 async function startTicket(tid){
   mode='ticket';
-  const qs=await api(`/questions/${tid}`);
+  const qs=await api(`/api/questions/${tid}`);
   flat=qs.map(q=>({...q,dir_id:curDir.id,dir_slug:curDir.slug,ticket_id:tid}));
   beginQuiz();
 }
 async function startMode(m){
   if(m==='all'){
     mode='all';
-    const data=await api(`/questions/all/${curDir.slug}`);
+    const data=await api(`/api/questions/all/${curDir.slug}`);
     flat=[];
     data.forEach(td=>td.questions.forEach(q=>{
       flat.push({...q,dir_id:curDir.id,dir_slug:curDir.slug,ticket_id:td.ticket_id});
     }));
   }else{
     mode='ticket';
-    const data=await api(`/random/${curDir.slug}`);
+    const data=await api(`/api/random/${curDir.slug}`);
     flat=data.questions.map(q=>({...q,dir_id:data.direction_id,dir_slug:data.direction_slug,ticket_id:data.ticket_id}));
   }
   beginQuiz();
@@ -420,7 +420,7 @@ async function startMode(m){
 async function startExam(){
   mode='exam'; curDir=null; flat=[];
   for(const d of dirs){
-    const data=await api(`/random/${d.slug}`);
+    const data=await api(`/api/random/${d.slug}`);
     data.questions.forEach(q=>flat.push({
       ...q,dir_id:data.direction_id,dir_slug:data.direction_slug,
       ticket_id:data.ticket_id,dir_title:d.title
@@ -483,7 +483,7 @@ async function showResult(){
 
   // Сохраняем
   try{
-    await api('/result',{method:'POST',body:JSON.stringify({
+    await api('/api/result',{method:'POST',body:JSON.stringify({
       mode, correct, total,
       direction_id:curDir?.id??null, ticket_id:null,
     })});
@@ -523,7 +523,7 @@ async function loadHistory(){
   const el=document.getElementById('hist-list');
   el.innerHTML='<div class="loader">Загрузка...</div>';
   try{
-    const rows=await api('/history');
+    const rows=await api('/api/history');
     if(!rows.length){el.innerHTML='<div class="loader">Нет записей</div>';return;}
     el.innerHTML=rows.map(r=>{
       const pct=Math.round(r.correct/r.total*100), ok=pct>=PASS_PERCENT;
