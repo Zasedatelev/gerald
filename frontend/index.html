@@ -283,7 +283,12 @@ h1 span{color:var(--accent);}
 const tg = window.Telegram?.WebApp;
 if(tg){ tg.ready(); tg.expand(); tg.setHeaderColor('#0e0e12'); tg.setBackgroundColor('#0e0e12'); }
 
-const API = 'https://testappgerald-olegz2026.amvera.io';
+// ── CONFIG ────────────────────────────────────
+// URL FastAPI. Если фронт и API на одном хосте — window.location.origin.
+// Иначе укажите явно: const API = 'https://testappgerald-olegz2026.amvera.io/api';
+// ⚠️  Замените на URL вашего бэкенд-проекта на Amvera
+// Пример: https://quiz-api-ваш-логин.amvera.io
+const API = 'https://BACKEND_PROJECT.amvera.io';
 
 // ── STATE ─────────────────────────────────────
 let token    = localStorage.getItem('qt') || '';
