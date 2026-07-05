@@ -65,25 +65,11 @@ async def cmd_help(message: Message) -> None:
 # ── Запуск ────────────────────────────────────
 
 async def main():
-    # ── Проверка переменных окружения при старте ──
-    import os
-    required = {
-        "BOT_TOKEN":    BOT_TOKEN,
-        "DATABASE_URL": os.getenv("DATABASE_URL", ""),
-        "MINI_APP_URL": MINI_APP_URL,
-        "JWT_SECRET":   os.getenv("JWT_SECRET", ""),
-    }
-    missing = []
-    for name, val in required.items():
-        if not val:
-            log.error("❌ Переменная окружения не задана: %s", name)
-            missing.append(name)
-        else:
-            # Показываем только начало значения для безопасности
-            preview = val[:6] + "..." if len(val) > 6 else val
-            log.info("✅ %s = %s", name, preview)
-    if missing:
-        raise RuntimeError(f"Не заданы переменные окружения: {', '.join(missing)}")
+    # ── Лог переменных при старте ──
+    log.info("✅ BOT_TOKEN = %s...", BOT_TOKEN[:6] if BOT_TOKEN else "НЕ ЗАДАН")
+    log.info("✅ MINI_APP_URL = %s", MINI_APP_URL or "НЕ ЗАДАН")
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN не задан")
 
     await db.create_pool()
     log.info("DB pool ready")
