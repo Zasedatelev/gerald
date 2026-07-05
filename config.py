@@ -4,10 +4,10 @@
 import os
 
 # ── Бот ──────────────────────────────────────
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8740049939:AAGNWwk7CrFYUqP6tHipuRW-ZzlofBMCvdw")
 
 # ── URL фронтенда (Vercel) ────────────────────
-MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://frontend-one-ochre-80.vercel.app")
 
 # ── PostgreSQL ────────────────────────────────
 DB_HOST = os.getenv("DB_HOST", "amvera-olegz2026-cnpg-testapp-bd-rw")
