@@ -10,7 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
-COPY bot.py api.py database.py auth.py config.py ./
+COPY bot.py api.py database.py auth.py config.py schema.sql ./
 
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
@@ -19,8 +19,6 @@ ENV DB_PORT=5432
 ENV DB_USER=postgres
 ENV DB_NAME=testAppbd
 ENV DB_PASS=260616
-ENV BOT_TOKEN=8740049939:AAGNWwk7CrFYUqP6tHipuRW-ZzlofBMCvdw
-ENV MINI_APP_URL=https://frontend-one-ochre-80.vercel.app
 
 EXPOSE 8000
 

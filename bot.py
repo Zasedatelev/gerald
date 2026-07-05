@@ -65,8 +65,40 @@ async def cmd_help(message: Message) -> None:
 # ── Запуск ────────────────────────────────────
 
 async def main():
+    # ── Проверка переменных окружения при старте ──
+    import os
+    required = {
+        "BOT_TOKEN":    BOT_TOKEN,
+        "DATABASE_URL": os.getenv("DATABASE_URL", ""),
+        "MINI_APP_URL": MINI_APP_URL,
+        "JWT_SECRET":   os.getenv("JWT_SECRET", ""),
+    }
+    missing = []
+    for name, val in required.items():
+        if not val:
+            log.error("❌ Переменная окружения не задана: %s", name)
+            missing.append(name)
+        else:
+            # Показываем только начало значения для безопасности
+            preview = val[:6] + "..." if len(val) > 6 else val
+            log.info("✅ %s = %s", name, preview)
+    if missing:
+        raise RuntimeError(f"Не заданы переменные окружения: {', '.join(missing)}")
+
     await db.create_pool()
     log.info("DB pool ready")
+
+    # ── Автоматическое применение схемы БД ──
+    import pathlib
+    schema_file = pathlib.Path("/app/schema.sql")
+    if schema_file.exists():
+        pool = await db.get_pool()
+        sql = schema_file.read_text()
+        try:
+            await pool.execute(sql)
+            log.info("✅ Схема БД применена")
+        except Exception as e:
+            log.warning("Схема уже применена или ошибка: %s", e)
 
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher()
