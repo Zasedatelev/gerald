@@ -25,21 +25,35 @@ async def create_pool():
     except Exception as e1:
         import logging
         logging.warning("DSN подключение не удалось (%s), пробуем через параметры...", e1)
-        try:
-            kwargs = dict(
-                host=DB_HOST,
-                port=DB_PORT,
-                user=DB_USER,
-                database=DB_NAME,
-                min_size=2,
-                max_size=10,
-            )
-            if DB_PASS:
-                kwargs["password"] = DB_PASS
-            _pool = await asyncpg.create_pool(**kwargs)
-        except Exception as e2:
-            logging.error("Подключение через параметры тоже не удалось: %s", e2)
-            raise
+        # Пробуем разные варианты аутентификации
+        last_err = None
+        attempts = [
+            # 1. С паролем + ssl disable
+            dict(host=DB_HOST, port=DB_PORT, user=DB_USER, database=DB_NAME,
+                 password=DB_PASS, ssl="disable", min_size=2, max_size=10),
+            # 2. Без пароля + ssl disable (peer/trust внутри Amvera)
+            dict(host=DB_HOST, port=DB_PORT, user=DB_USER, database=DB_NAME,
+                 ssl="disable", min_size=2, max_size=10),
+            # 3. С паролем без ssl
+            dict(host=DB_HOST, port=DB_PORT, user=DB_USER, database=DB_NAME,
+                 password=DB_PASS, min_size=2, max_size=10),
+            # 4. Без пароля без ssl
+            dict(host=DB_HOST, port=DB_PORT, user=DB_USER, database=DB_NAME,
+                 min_size=2, max_size=10),
+        ]
+        for i, kwargs in enumerate(attempts, 1):
+            try:
+                logging.info("Попытка подключения к БД #%d: host=%s ssl=%s pass=%s",
+                             i, DB_HOST, kwargs.get("ssl", "default"),
+                             "yes" if kwargs.get("password") else "no")
+                _pool = await asyncpg.create_pool(**kwargs)
+                logging.info("Подключение к БД успешно на попытке #%d", i)
+                return
+            except Exception as e:
+                logging.warning("Попытка #%d не удалась: %s", i, e)
+                last_err = e
+        logging.error("Все попытки подключения к БД исчерпаны")
+        raise last_err
 
 
 async def get_pool() -> asyncpg.Pool:
