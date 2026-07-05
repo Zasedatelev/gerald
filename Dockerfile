@@ -16,9 +16,9 @@ ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
 ENV DB_HOST=amvera-olegz2026-cnpg-testapp-bd-rw
 ENV DB_PORT=5432
-ENV DB_USER=olegzasedatelev
-ENV DB_NAME=olegzasedatelev
-ENV DB_PASS=
+ENV DB_USER=postgres
+ENV DB_NAME=testAppbd
+ENV DB_PASS=260616
 
 EXPOSE 8000
 

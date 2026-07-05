@@ -10,16 +10,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "")
 
 # ── PostgreSQL ────────────────────────────────
-# Amvera даёт только hostname — без пароля и порта.
-# Подключение через отдельные параметры, не через DSN.
 DB_HOST = os.getenv("DB_HOST", "amvera-olegz2026-cnpg-testapp-bd-rw")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
-DB_USER = os.getenv("DB_USER", "olegzasedatelev")
-DB_NAME = os.getenv("DB_NAME", "olegzasedatelev")
-DB_PASS = os.getenv("DB_PASS", "")  # пустой пароль — Amvera использует peer/trust внутри
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_NAME = os.getenv("DB_NAME", "testAppbd")
+DB_PASS = os.getenv("DB_PASS", "260616")
 
-# DATABASE_URL оставляем для совместимости — собираем из частей если не задан
-_dsn = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+_dsn = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 DATABASE_URL = os.getenv("DATABASE_URL", _dsn)
 
 # ── JWT ──────────────────────────────────────
