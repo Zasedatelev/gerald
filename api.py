@@ -1,16 +1,4 @@
-"""
-REST API (aiohttp) для Telegram Mini App.
 
-Эндпоинты:
-  POST /api/auth/register   — регистрация
-  POST /api/auth/login      — вход
-  GET  /api/directions      — список направлений
-  GET  /api/tickets/{dir}   — билеты направления
-  GET  /api/questions/{ticket_id}  — вопросы билета (перемешанные)
-  GET  /api/questions/all/{dir_slug} — все вопросы направления
-  POST /api/result          — сохранить результат
-  GET  /api/history         — история пользователя
-"""
 
 import json
 import random
@@ -20,7 +8,6 @@ from aiohttp import web
 import auth
 import database as db
 
-# ── Middleware: авторизация ────────────────────
 
 @web.middleware
 async def cors_middleware(request: web.Request, handler):
@@ -53,9 +40,6 @@ def require_auth(handler):
         return await handler(request)
     return wrapper
 
-
-# ── Helpers ───────────────────────────────────
-
 def ok(data: dict | list) -> web.Response:
     return web.Response(
         text=json.dumps(data, ensure_ascii=False, default=str),
@@ -79,9 +63,6 @@ def shuffle_answers(questions: list[dict]) -> list[dict]:
         random.shuffle(answers)
         result.append({**q, "answers": answers})
     return result
-
-
-# ── Auth ──────────────────────────────────────
 
 async def register(request: web.Request) -> web.Response:
     body = await request.json()
@@ -115,16 +96,10 @@ async def login(request: web.Request) -> web.Response:
 
     return ok({"token": token, "user_id": user["id"]})
 
-
-# ── Directions ────────────────────────────────
-
 @require_auth
 async def get_directions(request: web.Request) -> web.Response:
     dirs = await db.get_directions()
     return ok([{"id": d["id"], "slug": d["slug"], "title": d["title"]} for d in dirs])
-
-
-# ── Tickets ───────────────────────────────────
 
 @require_auth
 async def get_tickets(request: web.Request) -> web.Response:
@@ -136,16 +111,11 @@ async def get_tickets(request: web.Request) -> web.Response:
     return ok([{"id": t["id"], "number": t["number"]} for t in tickets])
 
 
-# ── Questions (single ticket) ─────────────────
-
 @require_auth
 async def get_questions(request: web.Request) -> web.Response:
     ticket_id = int(request.match_info["ticket_id"])
     questions = await db.get_ticket_questions(ticket_id)
     return ok(shuffle_answers(questions))
-
-
-# ── Questions (all in direction) ──────────────
 
 @require_auth
 async def get_all_questions(request: web.Request) -> web.Response:
@@ -158,9 +128,6 @@ async def get_all_questions(request: web.Request) -> web.Response:
     for td in tickets_data:
         td["questions"] = shuffle_answers(td["questions"])
     return ok(tickets_data)
-
-
-# ── Random ticket (for exam mode) ────────────
 
 @require_auth
 async def get_random_ticket_questions(request: web.Request) -> web.Response:
@@ -178,8 +145,6 @@ async def get_random_ticket_questions(request: web.Request) -> web.Response:
         "questions":     shuffle_answers(questions),
     })
 
-
-# ── Save result ───────────────────────────────
 
 @require_auth
 async def save_result(request: web.Request) -> web.Response:
@@ -200,16 +165,11 @@ async def save_result(request: web.Request) -> web.Response:
     return ok({"result_id": rid})
 
 
-# ── History ───────────────────────────────────
-
 @require_auth
 async def get_history(request: web.Request) -> web.Response:
     user = request["user"]
     rows = await db.get_history(user["sub"])
     return ok([dict(r) for r in rows])
-
-
-# ── App factory ───────────────────────────────
 
 def create_app() -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
@@ -226,5 +186,236 @@ def create_app() -> web.Application:
     app.router.add_get ("/api/random/{slug}",         get_random_ticket_questions)
     app.router.add_post("/api/result",                save_result)
     app.router.add_get ("/api/history",               get_history)
+    # ── Срезы ────────────────────────────────────
+    app.router.add_post("/api/slices",                     create_slice)
+    app.router.add_get ("/api/slices/my",                  my_slices)
+    app.router.add_get ("/api/slices/{slice_id}",          slice_info)
+    app.router.add_post("/api/slices/{slice_id}/join",     join_slice)
+    app.router.add_post("/api/slices/{slice_id}/submit",   submit_slice)
+    app.router.add_get ("/api/slices/{slice_id}/results",  slice_results)
 
     return app
+
+import datetime as dt
+
+@require_auth
+async def create_slice(request: web.Request) -> web.Response:
+    user = request["user"]
+    body = await request.json()
+
+    title        = body.get("title", "").strip()
+    password     = body.get("password", "").strip()
+    direction_id = body.get("direction_id")
+    pass_percent = int(body.get("pass_percent", 60))
+    duration_min = int(body.get("duration_min", 30))
+
+    if not title or not password or not direction_id:
+        return err(400, "title, password и direction_id обязательны")
+    if duration_min < 1 or duration_min > 180:
+        return err(400, "Длительность от 1 до 180 минут")
+
+    ends_at = dt.datetime.utcnow() + dt.timedelta(minutes=duration_min)
+
+    pool = await db.get_pool()
+    slice_id = await pool.fetchval("""
+        INSERT INTO slices (admin_id, direction_id, title, password, pass_percent, duration_min, ends_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+    """, user["sub"], direction_id, title, password, pass_percent, duration_min, ends_at)
+
+    return ok({"slice_id": slice_id, "ends_at": str(ends_at)})
+
+@require_auth
+async def join_slice(request: web.Request) -> web.Response:
+    user    = request["user"]
+    slice_id = int(request.match_info["slice_id"])
+    body    = await request.json()
+    password = body.get("password", "").strip()
+
+    pool = await db.get_pool()
+    slc  = await pool.fetchrow("SELECT * FROM slices WHERE id=$1", slice_id)
+    if not slc:
+        return err(404, "Срез не найден")
+    if slc["password"] != password:
+        return err(403, "Неверный пароль")
+    if dt.datetime.utcnow() > slc["ends_at"].replace(tzinfo=None):
+        return err(410, "Срез уже завершён")
+
+    #уже участвует?
+    existing = await pool.fetchrow(
+        "SELECT * FROM slice_participants WHERE slice_id=$1 AND user_id=$2",
+        slice_id, user["sub"]
+    )
+    if existing:
+        #возвращаем уже выданный билет
+        qs = await db.get_ticket_questions(existing["ticket_id"])
+        return ok({
+            "participant_id": existing["id"],
+            "ticket_id":      existing["ticket_id"],
+            "ends_at":        str(slc["ends_at"]),
+            "duration_min":   slc["duration_min"],
+            "questions":      shuffle_answers(qs),
+        })
+
+    #выдаём случайный билет
+    ticket = await db.get_random_ticket(slc["direction_id"])
+    if not ticket:
+        return err(500, "Нет билетов для этого направления")
+
+    pid = await pool.fetchval("""
+        INSERT INTO slice_participants (slice_id, user_id, ticket_id)
+        VALUES ($1,$2,$3) RETURNING id
+    """, slice_id, user["sub"], ticket["id"])
+
+    qs = await db.get_ticket_questions(ticket["id"])
+    return ok({
+        "participant_id": pid,
+        "ticket_id":      ticket["id"],
+        "ends_at":        str(slc["ends_at"]),
+        "duration_min":   slc["duration_min"],
+        "questions":      shuffle_answers(qs),
+    })
+
+@require_auth
+async def submit_slice(request: web.Request) -> web.Response:
+    user    = request["user"]
+    slice_id = int(request.match_info["slice_id"])
+    body    = await request.json()
+    # answers: [{question_id, answer_id}]  answer_id=null если не ответил
+    answers  = body.get("answers", [])
+
+    pool = await db.get_pool()
+    slc  = await pool.fetchrow("SELECT * FROM slices WHERE id=$1", slice_id)
+    if not slc:
+        return err(404, "Срез не найден")
+
+    part = await pool.fetchrow(
+        "SELECT * FROM slice_participants WHERE slice_id=$1 AND user_id=$2",
+        slice_id, user["sub"]
+    )
+    if not part:
+        return err(403, "Вы не участник этого среза")
+
+    correct = 0
+    total   = 0
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            #удаляем старые ответы если повторная отправка
+            await conn.execute(
+                "DELETE FROM slice_answers WHERE participant_id=$1", part["id"]
+            )
+            for a in answers:
+                q_id   = a.get("question_id")
+                ans_id = a.get("answer_id")
+                is_cor = False
+                if ans_id:
+                    is_cor = await conn.fetchval(
+                        "SELECT is_correct FROM answers WHERE id=$1", ans_id
+                    ) or False
+                if is_cor:
+                    correct += 1
+                total += 1
+                await conn.execute("""
+                    INSERT INTO slice_answers (participant_id, question_id, answer_id, is_correct)
+                    VALUES ($1,$2,$3,$4)
+                """, part["id"], q_id, ans_id, is_cor)
+
+            await conn.execute("""
+                UPDATE slice_participants
+                SET correct=$1, total=$2, finished_at=NOW()
+                WHERE id=$3
+            """, correct, total, part["id"])
+
+    return ok({"correct": correct, "total": total})
+
+@require_auth
+async def slice_results(request: web.Request) -> web.Response:
+    user     = request["user"]
+    slice_id = int(request.match_info["slice_id"])
+
+    pool = await db.get_pool()
+    slc  = await pool.fetchrow("SELECT * FROM slices WHERE id=$1", slice_id)
+    if not slc:
+        return err(404, "Срез не найден")
+    if slc["admin_id"] != user["sub"]:
+        return err(403, "Только админ может смотреть результаты")
+
+    participants = await pool.fetch("""
+        SELECT sp.id, sp.user_id, sp.ticket_id, sp.correct, sp.total,
+               sp.started_at, sp.finished_at,
+               u.telegram_id,
+               t.number AS ticket_number
+        FROM slice_participants sp
+        JOIN users u   ON u.id  = sp.user_id
+        LEFT JOIN tickets t ON t.id = sp.ticket_id
+        WHERE sp.slice_id = $1
+        ORDER BY sp.finished_at NULLS LAST
+    """, slice_id)
+
+    results = []
+    for p in participants:
+        #неправильные ответы
+        wrong_answers = await pool.fetch("""
+            SELECT q.text AS question_text, a.text AS answer_text
+            FROM slice_answers sa
+            JOIN questions q ON q.id = sa.question_id
+            LEFT JOIN answers a ON a.id = sa.answer_id
+            WHERE sa.participant_id=$1 AND sa.is_correct=false
+        """, p["id"])
+
+        pct    = round(p["correct"] / p["total"] * 100) if p["total"] else 0
+        passed = pct >= slc["pass_percent"]
+
+        results.append({
+            "user_login":    str(p["telegram_id"]),
+            "ticket_number": p["ticket_number"],
+            "correct":       p["correct"],
+            "total":         p["total"],
+            "percent":       pct,
+            "passed":        passed,
+            "grade":         "Зачёт" if passed else "Незачёт",
+            "finished":      bool(p["finished_at"]),
+            "wrong_answers": [dict(w) for w in wrong_answers],
+        })
+
+    return ok({
+        "slice_id":    slice_id,
+        "title":       slc["title"],
+        "ends_at":     str(slc["ends_at"]),
+        "pass_percent": slc["pass_percent"],
+        "participants": results,
+    })
+
+
+@require_auth
+async def my_slices(request: web.Request) -> web.Response:
+    user = request["user"]
+    pool = await db.get_pool()
+    rows = await pool.fetch("""
+        SELECT s.id, s.title, s.ends_at, s.pass_percent, s.duration_min,
+               d.title AS direction_title,
+               COUNT(sp.id) AS participant_count
+        FROM slices s
+        LEFT JOIN directions d ON d.id = s.direction_id
+        LEFT JOIN slice_participants sp ON sp.slice_id = s.id
+        WHERE s.admin_id = $1
+        GROUP BY s.id, d.title
+        ORDER BY s.created_at DESC
+    """, user["sub"])
+    return ok([dict(r) for r in rows])
+
+
+async def slice_info(request: web.Request) -> web.Response:
+    slice_id = int(request.match_info["slice_id"])
+    pool = await db.get_pool()
+    slc  = await pool.fetchrow("""
+        SELECT s.id, s.title, s.ends_at, s.pass_percent, s.duration_min,
+               d.title AS direction_title
+        FROM slices s
+        LEFT JOIN directions d ON d.id = s.direction_id
+        WHERE s.id = $1
+    """, slice_id)
+    if not slc:
+        return err(404, "Срез не найден")
+    now = dt.datetime.utcnow()
+    return ok({**dict(slc), "is_active": now < slc["ends_at"].replace(tzinfo=None)})

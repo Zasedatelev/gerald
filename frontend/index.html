@@ -6,6 +6,7 @@
 <title>Тестирование</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700;900&display=swap" rel="stylesheet"/>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://files.max.ru/bridge/v1/bridge.js"></script>
 <style>
 :root{
   --bg:#0e0e12;--surface:#17171d;--card:#1e1e26;--border:#2c2c38;
@@ -185,6 +186,26 @@ h1 span{color:var(--accent);}
 .section-chev{color:var(--muted);transition:transform .2s;}
 .section-body{padding:0 0 4px 0;}
 
+/* ── СРЕЗЫ ── */
+.slice-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:14px;margin-bottom:9px;}
+.slice-header{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+.slice-title{font-family:var(--display);font-size:12px;font-weight:700;flex:1;}
+.slice-badge{font-size:9px;padding:2px 7px;border-radius:2px;
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;}
+.slice-badge.active{background:var(--adim);color:var(--accent);border:1px solid var(--accent);}
+.slice-badge.closed{background:var(--wdim);color:var(--wrong);border:1px solid var(--wrong);}
+.slice-meta{font-size:10px;color:var(--muted);line-height:1.7;}
+.timer-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;}
+.timer-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 1s linear;}
+.result-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}
+.result-table th{text-align:left;color:var(--muted);font-weight:400;
+  padding:4px 8px;border-bottom:1px solid var(--border);}
+.result-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+.grade-pass{color:var(--accent);font-weight:700;}
+.grade-fail{color:var(--wrong);font-weight:700;}
+.wrong-list{font-size:10px;color:var(--muted);margin-top:3px;}
+
 .loader{display:flex;align-items:center;justify-content:center;
   flex:1;font-size:11px;color:var(--muted);}
 .divider{height:1px;background:var(--border);margin:14px 0;}
@@ -199,8 +220,9 @@ h1 span{color:var(--accent);}
   <div class="scroll" style="display:flex;flex-direction:column;justify-content:center;min-height:100%;">
     <div class="tag g">Авторизация</div>
     <h1>Вход в<br/><span>систему</span></h1>
-    <p class="sub" style="margin-bottom:24px;">Логин — ваш Telegram ID<br/>Пароль задаётся при первом входе</p>
-    <input class="field" id="f-tgid" type="text" inputmode="numeric" placeholder="Telegram ID (числовой)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+    <p class="sub" style="margin-bottom:12px;">Логин — ваш ID в Telegram или MAX<br/>Пароль задаётся при первом входе</p>
+    <div id="platform-user-badge" style="display:none;background:var(--adim);border:1px solid var(--accent);border-radius:var(--r);padding:10px 14px;font-size:13px;color:var(--accent);margin-bottom:12px;"></div>
+    <input class="field" id="f-tgid" type="text" inputmode="numeric" placeholder="Telegram / MAX ID" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
     <div style="position:relative;">
       <input class="field" id="f-pass" type="text" placeholder="Пароль (мин. 4 символа)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="-webkit-text-security:disc;text-security:disc;margin-bottom:0;"/>
       <button onclick="togglePass()" id="pass-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:4px;">👁</button>
@@ -216,6 +238,7 @@ h1 span{color:var(--accent);}
 <div class="view" id="v-home">
   <div class="tabs">
     <button class="tab active" onclick="tab('tab-test',this)">Тест</button>
+    <button class="tab"        onclick="tab('tab-slice',this)">Срез</button>
     <button class="tab"        onclick="tab('tab-hist',this)">История</button>
   </div>
   <div id="tab-test" class="scroll">
@@ -261,9 +284,93 @@ h1 span{color:var(--accent);}
       <div class="section-chev">›</div>
     </div>
   </div>
+  <div id="tab-slice" class="scroll hidden">
+    <div class="tag g">Срез</div>
+    <p class="sub" style="margin-bottom:14px;">Создайте срез или войдите по ссылке</p>
+
+    <!-- Войти в срез -->
+    <div class="card" style="margin-bottom:10px;">
+      <div class="card-title">🔗 Войти в срез</div>
+      <input class="field" id="join-id" type="number" inputmode="numeric" placeholder="ID среза" style="margin-bottom:8px;"/>
+      <input class="field" id="join-pass" type="text" placeholder="Пароль среза" style="-webkit-text-security:disc;text-security:disc;margin-bottom:8px;"/>
+      <button class="btn btn-b" onclick="joinSlice()">Войти в срез</button>
+    </div>
+
+    <!-- Создать срез -->
+    <div class="card">
+      <div class="card-title">➕ Создать срез</div>
+      <input class="field" id="cs-title"    type="text"   placeholder="Название среза" style="margin-bottom:8px;"/>
+      <input class="field" id="cs-pass"     type="text"   placeholder="Пароль для участников" style="margin-bottom:8px;"/>
+      <select class="field" id="cs-dir" style="margin-bottom:8px;background:var(--surface);cursor:pointer;">
+        <option value="">Выберите направление...</option>
+      </select>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <div class="sub" style="margin-bottom:4px;">Проходной балл %</div>
+          <input class="field" id="cs-pass-pct" type="number" value="60" min="1" max="100" style="margin-bottom:0;"/>
+        </div>
+        <div style="flex:1;">
+          <div class="sub" style="margin-bottom:4px;">Время (минут)</div>
+          <input class="field" id="cs-duration" type="number" value="30" min="1" max="180" style="margin-bottom:0;"/>
+        </div>
+      </div>
+      <button class="btn btn-g" onclick="createSlice()">Создать срез</button>
+    </div>
+
+    <!-- Мои срезы -->
+    <div class="divider"></div>
+    <div class="card-title">Мои срезы</div>
+    <div id="my-slices-list"><div class="loader" style="height:60px;">Загрузка...</div></div>
+  </div>
+
   <div id="tab-hist" class="scroll hidden">
     <div class="tag b">История</div>
     <div id="hist-list"><div class="loader">Загрузка...</div></div>
+  </div>
+</div>
+
+<!-- ══ SLICE QUIZ ══ -->
+<div class="view" id="v-slice-quiz">
+  <div class="topbar" style="justify-content:space-between;">
+    <div class="topbar-title" id="sq-title">Срез</div>
+    <div id="sq-timer" style="font-family:var(--display);font-size:12px;color:var(--exam);font-weight:700;"></div>
+  </div>
+  <div class="prog-row">
+    <div class="prog-track"><div class="prog-fill" id="sq-prog" style="width:0%"></div></div>
+    <span class="prog-lbl" id="sq-prog-lbl"></span>
+  </div>
+  <div class="q-head">
+    <div class="q-num" id="sq-qnum"></div>
+    <div class="q-txt" id="sq-qtxt"></div>
+  </div>
+  <div class="scroll" style="padding-top:12px;">
+    <div class="opts" id="sq-opts"></div>
+  </div>
+  <div class="next-wrap hidden" id="sq-nxt-wrap">
+    <button class="btn btn-g" id="sq-nxt-btn" onclick="sliceNextQ()"></button>
+  </div>
+</div>
+
+<!-- ══ SLICE RESULT ══ -->
+<div class="view" id="v-slice-result">
+  <div class="scroll">
+    <div class="tag g">Срез завершён</div>
+    <div class="res-score" id="sr-score"></div>
+    <div class="res-pct"   id="sr-pct"></div>
+    <div class="res-verdict" id="sr-verdict"></div>
+    <div class="divider"></div>
+    <button class="btn btn-g" onclick="goHome()">На главную</button>
+  </div>
+</div>
+
+<!-- ══ SLICE RESULTS ADMIN ══ -->
+<div class="view" id="v-slice-admin">
+  <div class="topbar">
+    <button class="back-btn" onclick="show('v-home')">← Назад</button>
+    <div class="topbar-title" id="sa-title">Результаты среза</div>
+  </div>
+  <div class="scroll">
+    <div id="sa-content"><div class="loader">Загрузка...</div></div>
   </div>
 </div>
 
@@ -338,29 +445,64 @@ h1 span{color:var(--accent);}
 <script>
 'use strict';
 
-const tg = window.Telegram?.WebApp;
-if(tg){ tg.ready(); tg.expand(); tg.setHeaderColor('#0e0e12'); tg.setBackgroundColor('#0e0e12'); }
+// Автоопределение платформы
+const tg = window.Telegram?.WebApp || null;
+let PLATFORM = 'web';
+let PLATFORM_USER_ID = null;
 
-// ── CONFIG ────────────────────────────────────
-// URL FastAPI. Если фронт и API на одном хосте — window.location.origin.
-// Иначе укажите явно: const API = 'https://testappgerald-olegz2026.amvera.io';
-// ⚠️  Замените на URL вашего бэкенд-проекта на Amvera
-// Пример: https://quiz-api-ваш-логин.amvera.io
+function _prefillUserId(id, name) {
+  const field = document.getElementById('f-tgid');
+  if (field) { field.value = String(id); field.style.display = 'none'; }
+  const badge = document.getElementById('platform-user-badge');
+  if (badge) {
+    badge.textContent = name ? `👤 ${name}` : `👤 ID: ${id}`;
+    badge.style.display = 'block';
+  }
+}
+
+(async () => {
+  // Telegram
+  if (tg) {
+    try {
+      tg.ready(); tg.expand();
+      tg.setHeaderColor('#0e0e12');
+      tg.setBackgroundColor('#0e0e12');
+      const u = tg.initDataUnsafe?.user;
+      if (u?.id) {
+        PLATFORM = 'telegram';
+        PLATFORM_USER_ID = u.id;
+        _prefillUserId(u.id, [u.first_name, u.last_name].filter(Boolean).join(' '));
+        return;
+      }
+    } catch(e) { console.warn('Telegram init:', e); }
+  }
+  // MAX
+  if (window.MaxBridge) {
+    try {
+      await window.MaxBridge.init();
+      const u = await window.MaxBridge.getUserInfo();
+      if (u?.userId) {
+        PLATFORM = 'max';
+        PLATFORM_USER_ID = u.userId;
+        _prefillUserId(u.userId, u.firstName || '');
+      }
+    } catch(e) { console.warn('MAX init:', e); }
+  }
+})();
+
 const API = 'https://testappgerald-olegz2026.amvera.io';
 
-// ── STATE ─────────────────────────────────────
 let token    = localStorage.getItem('qt') || '';
 let dirs     = [];
-let curDir   = null;   // { id, slug, title }
-let flat     = [];     // все вопросы текущего теста
+let curDir   = null;  
+let flat     = [];     
 let qi       = 0;
-let answers  = [];     // { text, correct }
+let answers  = [];     
 let mode     = '';
 let answered = false;
-const LABELS = ['A','B','C','D','E']; // до 5 вариантов ответа
-const PASS_PERCENT = 100; // должно совпадать с PASS_PERCENT в config.py
+const LABELS = ['A','B','C','D','E']; 
+const PASS_PERCENT = 100; 
 
-// ── API ───────────────────────────────────────
 async function api(path, opts={}){
   const h = {'Content-Type':'application/json'};
   if(token) h['Authorization']='Bearer '+token;
@@ -378,7 +520,6 @@ async function api(path, opts={}){
   return body;
 }
 
-// ── VIEWS ─────────────────────────────────────
 function show(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -392,12 +533,11 @@ function tab(id, el){
   if(id==='tab-hist') loadHistory();
 }
 
-// ── AUTH ──────────────────────────────────────
 async function doLogin(){
   const raw=document.getElementById('f-tgid').value.trim();
   const pass=document.getElementById('f-pass').value;
   authErr('');
-  if(!/^\d+$/.test(raw)){authErr('Telegram ID должен содержать только цифры');return;}
+  if(!/^\d+$/.test(raw)){authErr('ID должен содержать только цифры');return;}
   if(!pass){authErr('Введите пароль');return;}
   const tgid=parseInt(raw,10);
   try{
@@ -409,7 +549,7 @@ async function doRegister(){
   const raw=document.getElementById('f-tgid').value.trim();
   const pass=document.getElementById('f-pass').value;
   authErr('');
-  if(!/^\d+$/.test(raw)){authErr('Telegram ID должен содержать только цифры');return;}
+  if(!/^\d+$/.test(raw)){authErr('ID должен содержать только цифры');return;}
   if(pass.length<4){authErr('Пароль минимум 4 символа');return;}
   const tgid=parseInt(raw,10);
   try{
@@ -426,7 +566,6 @@ function togglePass(){
   else{f.style.webkitTextSecurity='disc';f.style.textSecurity='disc';e.textContent='👁';}
 }
 
-// ── SECTIONS ─────────────────────────────────
 function toggleSection(id){
   const body=document.getElementById(id);
   const slug=id.replace('sec-','');
@@ -441,7 +580,6 @@ function openComingSoon(title){
   show('v-coming');
 }
 
-// ── HOME ──────────────────────────────────────
 const ICONS={legal:'⚖️',political:'🏛',fire:'🔫',tactical:'🪖'};
 async function initHome(){
   show('v-home');
@@ -457,7 +595,6 @@ async function initHome(){
     </div>`).join('');
 }
 
-// ── DIRECTION ─────────────────────────────────
 async function openDir(id,slug,title){
   curDir={id,slug,title};
   document.getElementById('dir-title').textContent=title;
@@ -468,7 +605,6 @@ async function openDir(id,slug,title){
   show('v-dir');
 }
 
-// ── START MODES ───────────────────────────────
 async function startTicket(tid){
   mode='ticket';
   const qs=await api(`/api/questions/${tid}`);
@@ -502,7 +638,6 @@ async function startExam(){
   beginQuiz();
 }
 
-// ── QUIZ ──────────────────────────────────────
 function beginQuiz(){ qi=0; answers=[]; answered=false; renderQ(); show('v-quiz'); }
 
 function renderQ(){
@@ -530,7 +665,7 @@ function pick(ans,btn){
   if(answered)return; answered=true;
   const ok=ans.is_correct;
   answers.push({text:flat[qi].text, correct:ok});
-  tg?.HapticFeedback?.impactOccurred(ok?'light':'rigid');
+  if(tg?.HapticFeedback) tg.HapticFeedback.impactOccurred(ok?'light':'rigid');
 
   document.querySelectorAll('.opt').forEach((b,i)=>{
     b.disabled=true;
@@ -546,7 +681,6 @@ function pick(ans,btn){
 
 function nextQ(){ qi++; qi<flat.length ? renderQ() : showResult(); }
 
-// ── RESULT ────────────────────────────────────
 async function showResult(){
   const total=flat.length, correct=answers.filter(a=>a.correct).length;
   const pct=Math.round(correct/total*100), passed=pct>=PASS_PERCENT;
@@ -554,7 +688,7 @@ async function showResult(){
   document.getElementById('prog').style.width='100%';
   document.getElementById('prog-lbl').textContent=`${total} / ${total}`;
 
-  // Сохраняем
+  //сохраняем
   try{
     await api('/api/result',{method:'POST',body:JSON.stringify({
       mode, correct, total,
@@ -590,7 +724,6 @@ async function showResult(){
 
 function goHome(){ show('v-home'); }
 
-// ── HISTORY ───────────────────────────────────
 const ML={ticket:'Билет',all:'Все вопросы',exam:'Экзамен'};
 async function loadHistory(){
   const el=document.getElementById('hist-list');
@@ -615,7 +748,240 @@ async function loadHistory(){
   }catch(e){el.innerHTML=`<div class="loader" style="color:var(--wrong)">${e.message}</div>`;}
 }
 
-// ── INIT ──────────────────────────────────────
+
+let sliceSession = null; 
+
+
+const _origTab = tab;
+function tab(id, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-test').classList.toggle('hidden',  id!=='tab-test');
+  document.getElementById('tab-slice').classList.toggle('hidden', id!=='tab-slice');
+  document.getElementById('tab-hist').classList.toggle('hidden',  id!=='tab-hist');
+  if(id==='tab-hist')  loadHistory();
+  if(id==='tab-slice') loadMySlices();
+}
+
+async function fillDirSelect(){
+  const sel = document.getElementById('cs-dir');
+  if(sel.options.length > 1) return;
+  try{
+    const d = await api('/api/directions');
+    d.forEach(dir=>{
+      const o = document.createElement('option');
+      o.value = dir.id; o.textContent = dir.title;
+      sel.appendChild(o);
+    });
+  }catch(e){ console.warn(e); }
+}
+
+//создаем срез
+async function createSlice(){
+  await fillDirSelect();
+  const title   = document.getElementById('cs-title').value.trim();
+  const pass    = document.getElementById('cs-pass').value.trim();
+  const dirId   = document.getElementById('cs-dir').value;
+  const pct     = document.getElementById('cs-pass-pct').value;
+  const dur     = document.getElementById('cs-duration').value;
+  if(!title||!pass||!dirId){alert('Заполните все поля');return;}
+  try{
+    const d = await api('/api/slices',{method:'POST',body:JSON.stringify({
+      title, password:pass, direction_id:+dirId,
+      pass_percent:+pct, duration_min:+dur
+    })});
+    alert(`✅ Срез создан!
+
+ID среза: ${d.slice_id}
+Поделитесь ID и паролем с участниками`);
+    loadMySlices();
+    //очищает форму
+    ['cs-title','cs-pass'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+
+//вход в срез
+async function joinSlice(){
+  const sliceId = document.getElementById('join-id').value.trim();
+  const pass    = document.getElementById('join-pass').value.trim();
+  if(!sliceId||!pass){alert('Введите ID и пароль среза');return;}
+  try{
+    const d = await api(`/api/slices/${sliceId}/join`,{method:'POST',
+      body:JSON.stringify({password:pass})});
+    startSliceQuiz(sliceId, d);
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+
+function startSliceQuiz(sliceId, data){
+  sliceSession = {
+    sliceId,
+    pid:       data.participant_id,
+    questions: data.questions,
+    answers:   [],
+    qi:        0,
+    endsAt:    new Date(data.ends_at.replace(' ','T')+'Z'),
+  };
+  document.getElementById('sq-title').textContent = 'Срез';
+  renderSliceQ();
+  startSliceTimer();
+  show('v-slice-quiz');
+}
+
+function renderSliceQ(){
+  const s = sliceSession;
+  const q = s.questions[s.qi];
+  const total = s.questions.length;
+  document.getElementById('sq-qnum').textContent = `// ВОПРОС ${s.qi+1}`;
+  document.getElementById('sq-qtxt').textContent = q.text;
+  document.getElementById('sq-prog').style.width = `${s.qi/total*100}%`;
+  document.getElementById('sq-prog-lbl').textContent = `${s.qi} / ${total}`;
+  document.getElementById('sq-nxt-wrap').classList.add('hidden');
+
+  const nxt = document.getElementById('sq-nxt-btn');
+  nxt.textContent = s.qi===total-1 ? '📊 Завершить срез' : 'Следующий →';
+
+  const c = document.getElementById('sq-opts'); c.innerHTML='';
+  q.answers.forEach((a,i)=>{
+    const b = document.createElement('button');
+    b.className='opt';
+    b.innerHTML=`<span class="opt-lbl">${LABELS[i]}</span>${a.text}`;
+    b.onclick=()=>pickSliceAnswer(a, b, q);
+    c.appendChild(b);
+  });
+}
+
+function pickSliceAnswer(ans, btn, q){
+  if(document.getElementById('sq-nxt-wrap').classList.contains('hidden')===false) return;
+  // в срезе не показываем правильный ответ
+  document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
+  btn.style.borderColor='var(--accent2)';
+  btn.querySelector('.opt-lbl').style.color='var(--accent2)';
+
+  sliceSession.answers.push({
+    question_id: q.id,
+    answer_id:   ans.id,
+  });
+  document.getElementById('sq-nxt-wrap').classList.remove('hidden');
+}
+
+function sliceNextQ(){
+  sliceSession.qi++;
+  if(sliceSession.qi < sliceSession.questions.length){
+    renderSliceQ();
+  } else {
+    finishSlice();
+  }
+}
+
+async function finishSlice(){
+  clearInterval(sliceSession.timerInterval);
+  const s = sliceSession;
+
+  //пустые ответы на непройденные вопросы
+  const answered = new Set(s.answers.map(a=>a.question_id));
+  s.questions.forEach(q=>{
+    if(!answered.has(q.id)) s.answers.push({question_id:q.id, answer_id:null});
+  });
+
+  try{
+    const d = await api(`/api/slices/${s.sliceId}/submit`,{method:'POST',
+      body:JSON.stringify({answers: s.answers})});
+
+    const pct = Math.round(d.correct/d.total*100);
+    document.getElementById('sr-score').textContent = `${d.correct}/${d.total}`;
+    document.getElementById('sr-score').className = 'res-score '+(pct>=60?'pass':'fail');
+    document.getElementById('sr-pct').textContent = `${pct}% правильных`;
+    document.getElementById('sr-verdict').textContent = pct>=60?'✅ Зачёт':'❌ Незачёт';
+    show('v-slice-result');
+  }catch(e){
+    alert('Ошибка отправки: '+e.message);
+  }
+}
+
+function startSliceTimer(){
+  function tick(){
+    const now  = new Date();
+    const diff = Math.max(0, sliceSession.endsAt - now);
+    const m    = Math.floor(diff/60000);
+    const s2   = Math.floor((diff%60000)/1000);
+    const str  = `${m}:${String(s2).padStart(2,'0')}`;
+    document.getElementById('sq-timer').textContent = str;
+    if(diff<=0){
+      clearInterval(sliceSession.timerInterval);
+      document.getElementById('sq-timer').textContent='00:00';
+      finishSlice();
+    }
+  }
+  tick();
+  sliceSession.timerInterval = setInterval(tick, 1000);
+}
+
+async function loadMySlices(){
+  await fillDirSelect();
+  const el = document.getElementById('my-slices-list');
+  el.innerHTML='<div class="loader" style="height:60px;">Загрузка...</div>';
+  try{
+    const rows = await api('/api/slices/my');
+    if(!rows.length){ el.innerHTML='<div class="sub" style="padding:8px 0;">Вы ещё не создавали срезов</div>'; return; }
+    el.innerHTML = rows.map(r=>{
+      const now    = new Date();
+      const ends   = new Date(r.ends_at.replace(' ','T')+'Z');
+      const active = now < ends;
+      const badge  = active
+        ? '<span class="slice-badge active">Активен</span>'
+        : '<span class="slice-badge closed">Завершён</span>';
+      return `<div class="slice-card">
+        <div class="slice-header">
+          <div class="slice-title">${r.title}</div>${badge}
+        </div>
+        <div class="slice-meta">
+          ${r.direction_title||'—'} · ${r.participant_count} участников · ${r.pass_percent}% проходной
+        </div>
+        <button class="btn btn-o" style="margin-top:10px;padding:9px;"
+          onclick="openSliceResults(${r.id})">📊 Результаты</button>
+      </div>`;
+    }).join('');
+  }catch(e){ el.innerHTML=`<div class="sub" style="color:var(--wrong)">${e.message}</div>`; }
+}
+
+async function openSliceResults(sliceId){
+  show('v-slice-admin');
+  const el = document.getElementById('sa-content');
+  el.innerHTML='<div class="loader">Загрузка...</div>';
+  try{
+    const d = await api(`/api/slices/${sliceId}/results`);
+    document.getElementById('sa-title').textContent = d.title;
+    if(!d.participants.length){
+      el.innerHTML='<div class="sub">Участников пока нет</div>'; return;
+    }
+    el.innerHTML=`
+      <div class="slice-meta" style="margin-bottom:12px;">
+        Проходной балл: ${d.pass_percent}%
+      </div>
+      <table class="result-table">
+        <tr>
+          <th>Логин</th><th>Билет</th><th>Результат</th><th>Оценка</th>
+        </tr>
+        ${d.participants.map(p=>`
+          <tr>
+            <td>${p.user_login}</td>
+            <td>${p.ticket_number||'—'}</td>
+            <td>${p.correct}/${p.total} (${p.percent}%)</td>
+            <td class="${p.passed?'grade-pass':'grade-fail'}">${p.grade}</td>
+          </tr>
+          ${p.wrong_answers.length?`
+          <tr>
+            <td colspan="4">
+              <div class="wrong-list">
+                ❌ ${p.wrong_answers.map(w=>w.question_text).join('<br/>❌ ')}
+              </div>
+            </td>
+          </tr>`:''}
+        `).join('')}
+      </table>`;
+  }catch(e){ el.innerHTML=`<div class="sub" style="color:var(--wrong)">${e.message}</div>`; }
+}
+
 (async()=>{
   if(!token){show('v-auth');return;}
   try{ await initHome(); }
