@@ -1,4 +1,16 @@
+"""
+REST API (aiohttp) для Telegram Mini App.
 
+Эндпоинты:
+  POST /api/auth/register   — регистрация
+  POST /api/auth/login      — вход
+  GET  /api/directions      — список направлений
+  GET  /api/tickets/{dir}   — билеты направления
+  GET  /api/questions/{ticket_id}  — вопросы билета (перемешанные)
+  GET  /api/questions/all/{dir_slug} — все вопросы направления
+  POST /api/result          — сохранить результат
+  GET  /api/history         — история пользователя
+"""
 
 import json
 import random
@@ -8,6 +20,7 @@ from aiohttp import web
 import auth
 import database as db
 
+# ── Middleware: авторизация ────────────────────
 
 @web.middleware
 async def cors_middleware(request: web.Request, handler):
@@ -40,6 +53,9 @@ def require_auth(handler):
         return await handler(request)
     return wrapper
 
+
+# ── Helpers ───────────────────────────────────
+
 def ok(data: dict | list) -> web.Response:
     return web.Response(
         text=json.dumps(data, ensure_ascii=False, default=str),
@@ -64,13 +80,19 @@ def shuffle_answers(questions: list[dict]) -> list[dict]:
         result.append({**q, "answers": answers})
     return result
 
+
+# ── Auth ──────────────────────────────────────
+
 async def register(request: web.Request) -> web.Response:
     body = await request.json()
     tg_id    = int(body.get("telegram_id", 0))
     password = body.get("password", "").strip()
 
-    if not tg_id or len(password) < 4:
-        return err(400, "telegram_id и пароль (мин. 4 символа) обязательны")
+    login_str = str(tg_id)
+    if len(login_str) != 10 or not login_str.isdigit():
+        return err(400, "Логин должен содержать ровно 10 цифр")
+    if len(password) < 4:
+        return err(400, "Пароль минимум 4 символа")
 
     existing = await db.get_user_by_tg(tg_id)
     if existing:
@@ -96,10 +118,16 @@ async def login(request: web.Request) -> web.Response:
 
     return ok({"token": token, "user_id": user["id"]})
 
+
+# ── Directions ────────────────────────────────
+
 @require_auth
 async def get_directions(request: web.Request) -> web.Response:
     dirs = await db.get_directions()
     return ok([{"id": d["id"], "slug": d["slug"], "title": d["title"]} for d in dirs])
+
+
+# ── Tickets ───────────────────────────────────
 
 @require_auth
 async def get_tickets(request: web.Request) -> web.Response:
@@ -111,11 +139,16 @@ async def get_tickets(request: web.Request) -> web.Response:
     return ok([{"id": t["id"], "number": t["number"]} for t in tickets])
 
 
+# ── Questions (single ticket) ─────────────────
+
 @require_auth
 async def get_questions(request: web.Request) -> web.Response:
     ticket_id = int(request.match_info["ticket_id"])
     questions = await db.get_ticket_questions(ticket_id)
     return ok(shuffle_answers(questions))
+
+
+# ── Questions (all in direction) ──────────────
 
 @require_auth
 async def get_all_questions(request: web.Request) -> web.Response:
@@ -128,6 +161,9 @@ async def get_all_questions(request: web.Request) -> web.Response:
     for td in tickets_data:
         td["questions"] = shuffle_answers(td["questions"])
     return ok(tickets_data)
+
+
+# ── Random ticket (for exam mode) ────────────
 
 @require_auth
 async def get_random_ticket_questions(request: web.Request) -> web.Response:
@@ -145,6 +181,8 @@ async def get_random_ticket_questions(request: web.Request) -> web.Response:
         "questions":     shuffle_answers(questions),
     })
 
+
+# ── Save result ───────────────────────────────
 
 @require_auth
 async def save_result(request: web.Request) -> web.Response:
@@ -165,11 +203,16 @@ async def save_result(request: web.Request) -> web.Response:
     return ok({"result_id": rid})
 
 
+# ── History ───────────────────────────────────
+
 @require_auth
 async def get_history(request: web.Request) -> web.Response:
     user = request["user"]
     rows = await db.get_history(user["sub"])
     return ok([dict(r) for r in rows])
+
+
+# ── App factory ───────────────────────────────
 
 def create_app() -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
@@ -196,7 +239,14 @@ def create_app() -> web.Application:
 
     return app
 
+
+# ══════════════════════════════════════════════════════════════
+#  СРЕЗЫ
+# ══════════════════════════════════════════════════════════════
+
 import datetime as dt
+
+# ── Создать срез ──────────────────────────────
 
 @require_auth
 async def create_slice(request: web.Request) -> web.Response:
@@ -224,6 +274,9 @@ async def create_slice(request: web.Request) -> web.Response:
 
     return ok({"slice_id": slice_id, "ends_at": str(ends_at)})
 
+
+# ── Войти в срез ─────────────────────────────
+
 @require_auth
 async def join_slice(request: web.Request) -> web.Response:
     user    = request["user"]
@@ -240,13 +293,13 @@ async def join_slice(request: web.Request) -> web.Response:
     if dt.datetime.utcnow() > slc["ends_at"].replace(tzinfo=None):
         return err(410, "Срез уже завершён")
 
-    #уже участвует?
+    # Уже участвует?
     existing = await pool.fetchrow(
         "SELECT * FROM slice_participants WHERE slice_id=$1 AND user_id=$2",
         slice_id, user["sub"]
     )
     if existing:
-        #возвращаем уже выданный билет
+        # Возвращаем уже выданный билет
         qs = await db.get_ticket_questions(existing["ticket_id"])
         return ok({
             "participant_id": existing["id"],
@@ -256,7 +309,7 @@ async def join_slice(request: web.Request) -> web.Response:
             "questions":      shuffle_answers(qs),
         })
 
-    #выдаём случайный билет
+    # Выдаём случайный билет
     ticket = await db.get_random_ticket(slc["direction_id"])
     if not ticket:
         return err(500, "Нет билетов для этого направления")
@@ -274,6 +327,9 @@ async def join_slice(request: web.Request) -> web.Response:
         "duration_min":   slc["duration_min"],
         "questions":      shuffle_answers(qs),
     })
+
+
+# ── Сохранить ответы участника ────────────────
 
 @require_auth
 async def submit_slice(request: web.Request) -> web.Response:
@@ -300,7 +356,7 @@ async def submit_slice(request: web.Request) -> web.Response:
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            #удаляем старые ответы если повторная отправка
+            # Удаляем старые ответы если повторная отправка
             await conn.execute(
                 "DELETE FROM slice_answers WHERE participant_id=$1", part["id"]
             )
@@ -328,6 +384,9 @@ async def submit_slice(request: web.Request) -> web.Response:
 
     return ok({"correct": correct, "total": total})
 
+
+# ── Результаты среза (для админа) ─────────────
+
 @require_auth
 async def slice_results(request: web.Request) -> web.Response:
     user     = request["user"]
@@ -354,7 +413,7 @@ async def slice_results(request: web.Request) -> web.Response:
 
     results = []
     for p in participants:
-        #неправильные ответы
+        # Неправильные ответы
         wrong_answers = await pool.fetch("""
             SELECT q.text AS question_text, a.text AS answer_text
             FROM slice_answers sa
@@ -387,6 +446,8 @@ async def slice_results(request: web.Request) -> web.Response:
     })
 
 
+# ── Мои срезы (созданные) ─────────────────────
+
 @require_auth
 async def my_slices(request: web.Request) -> web.Response:
     user = request["user"]
@@ -404,6 +465,8 @@ async def my_slices(request: web.Request) -> web.Response:
     """, user["sub"])
     return ok([dict(r) for r in rows])
 
+
+# ── Инфо о срезе по ID (для участника) ───────
 
 async def slice_info(request: web.Request) -> web.Response:
     slice_id = int(request.match_info["slice_id"])
