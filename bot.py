@@ -27,7 +27,6 @@ log = logging.getLogger(__name__)
 router = Router()
 
 
-# ── /start ────────────────────────────────────
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
@@ -62,7 +61,6 @@ async def cmd_help(message: Message) -> None:
     )
 
 
-# ── Запуск ────────────────────────────────────
 
 async def main():
     # ── Лог переменных при старте ──
@@ -74,7 +72,6 @@ async def main():
     await db.create_pool()
     log.info("DB pool ready")
 
-    # ── Автоматическое применение схемы БД ──
     import pathlib
     schema_file = pathlib.Path("/app/schema.sql")
     if schema_file.exists():
@@ -85,6 +82,34 @@ async def main():
             log.info("✅ Схема БД применена")
         except Exception as e:
             log.warning("Схема уже применена или ошибка: %s", e)
+
+    import pathlib
+    pool = await db.get_pool()
+    migrations = [
+        ("slices",             "CREATE TABLE IF NOT EXISTS slices (id SERIAL PRIMARY KEY, admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, direction_id INTEGER REFERENCES directions(id) ON DELETE SET NULL, title VARCHAR(256) NOT NULL, password VARCHAR(256) NOT NULL, pass_percent SMALLINT NOT NULL DEFAULT 60, duration_min SMALLINT NOT NULL DEFAULT 30, ends_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"),
+        ("slice_participants", "CREATE TABLE IF NOT EXISTS slice_participants (id SERIAL PRIMARY KEY, slice_id INTEGER NOT NULL REFERENCES slices(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, ticket_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL, started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), finished_at TIMESTAMPTZ, correct SMALLINT, total SMALLINT, UNIQUE (slice_id, user_id))"),
+        ("slice_answers",      "CREATE TABLE IF NOT EXISTS slice_answers (id SERIAL PRIMARY KEY, participant_id INTEGER NOT NULL REFERENCES slice_participants(id) ON DELETE CASCADE, question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE, answer_id INTEGER REFERENCES answers(id) ON DELETE SET NULL, is_correct BOOLEAN NOT NULL DEFAULT FALSE, answered_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"),
+    ]
+    for table_name, ddl in migrations:
+        try:
+            await pool.execute(ddl)
+            log.info("✅ Таблица %s готова", table_name)
+        except Exception as e:
+            log.warning("Таблица %s: %s", table_name, e)
+
+    pool = await db.get_pool()
+    count = await pool.fetchval("SELECT COUNT(*) FROM directions")
+    if count == 0:
+        await pool.execute("""
+            INSERT INTO directions (slug, title) VALUES
+            ('legal',     'Правовая подготовка'),
+            ('political', 'Политическая подготовка'),
+            ('fire',      'Огневая подготовка'),
+            ('tactical',  'Тактико-специальная подготовка')
+        """)
+        log.info("✅ Направления добавлены в БД")
+    else:
+        log.info("✅ Направления уже есть в БД (%d шт.)", count)
 
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher()
