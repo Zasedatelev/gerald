@@ -272,7 +272,7 @@ async def create_slice(request: web.Request) -> web.Response:
         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
     """, user["sub"], direction_id, title, password, pass_percent, duration_min, ends_at)
 
-    return ok({"slice_id": slice_id, "ends_at": str(ends_at)})
+    return ok({"slice_id": slice_id, "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M:%SZ")})
 
 
 # ── Войти в срез ─────────────────────────────
@@ -304,7 +304,7 @@ async def join_slice(request: web.Request) -> web.Response:
         return ok({
             "participant_id": existing["id"],
             "ticket_id":      existing["ticket_id"],
-            "ends_at":        str(slc["ends_at"]),
+            "ends_at":        slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
             "duration_min":   slc["duration_min"],
             "questions":      shuffle_answers(qs),
         })
@@ -323,7 +323,7 @@ async def join_slice(request: web.Request) -> web.Response:
     return ok({
         "participant_id": pid,
         "ticket_id":      ticket["id"],
-        "ends_at":        str(slc["ends_at"]),
+        "ends_at":        slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "duration_min":   slc["duration_min"],
         "questions":      shuffle_answers(qs),
     })
@@ -440,7 +440,7 @@ async def slice_results(request: web.Request) -> web.Response:
     return ok({
         "slice_id":    slice_id,
         "title":       slc["title"],
-        "ends_at":     str(slc["ends_at"]),
+        "ends_at":     slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "pass_percent": slc["pass_percent"],
         "participants": results,
     })

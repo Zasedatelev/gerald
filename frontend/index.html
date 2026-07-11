@@ -450,7 +450,7 @@ const tg = null; // платформонезависимый режим
 // Иначе укажите явно: const API = 'https://testappgerald-olegz2026.amvera.io';
 // ⚠️  Замените на URL вашего бэкенд-проекта на Amvera
 // Пример: https://quiz-api-ваш-логин.amvera.io
-const API = 'https://testappgerald-olegz2026.amvera.io';
+const API = 'https://BACKEND_PROJECT.amvera.io';
 
 // ── STATE ─────────────────────────────────────
 let token    = localStorage.getItem('qt') || '';
@@ -725,6 +725,20 @@ async function loadHistory(){
 
 let sliceSession = null; // { pid, questions, answers, endsAt, timerInterval }
 
+// ── Парсинг даты от сервера (PostgreSQL → JS Date) ─
+function parseServerDate(str) {
+  if (!str) return new Date(0);
+  // Форматы: "2026-07-11 08:06:06+00" или "2026-07-11 08:06:06" или ISO
+  // Приводим к ISO: заменяем пробел на T, убираем +00 и добавляем Z
+  const clean = str
+    .replace(' ', 'T')          // пробел → T
+    .replace(/\+00(:00)?$/, '') // убираем +00 или +00:00
+    .replace(/\.\d+$/, '')     // убираем микросекунды если есть
+    + 'Z';                       // добавляем Z (UTC)
+  const d = new Date(clean);
+  return isNaN(d.getTime()) ? new Date(str) : d;
+}
+
 // ── Переключение вкладок (обновлённое) ───────
 const _origTab = tab;
 function tab(id, el){
@@ -795,7 +809,7 @@ function startSliceQuiz(sliceId, data){
     questions: data.questions,
     answers:   [],
     qi:        0,
-    endsAt:    new Date(data.ends_at.replace(' ','T')+'Z'),
+    endsAt:    parseServerDate(data.ends_at),
   };
   document.getElementById('sq-title').textContent = 'Срез';
   renderSliceQ();
@@ -903,7 +917,7 @@ async function loadMySlices(){
     if(!rows.length){ el.innerHTML='<div class="sub" style="padding:8px 0;">Вы ещё не создавали срезов</div>'; return; }
     el.innerHTML = rows.map(r=>{
       const now    = new Date();
-      const ends   = new Date(r.ends_at.replace(' ','T')+'Z');
+      const ends   = parseServerDate(r.ends_at);
       const active = now < ends;
       const badge  = active
         ? '<span class="slice-badge active">Активен</span>'
