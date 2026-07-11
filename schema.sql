@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS slice_participants (
     finished_at TIMESTAMPTZ,                   -- NULL = ещё не завершил
     correct    SMALLINT,
     total      SMALLINT,
+    tickets_json TEXT,                   -- JSON со списком билетов (для геральдики)
     UNIQUE (slice_id, user_id)
 );
 

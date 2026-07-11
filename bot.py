@@ -101,6 +101,13 @@ async def main():
         except Exception as e:
             log.warning("Таблица %s: %s", table_name, e)
 
+    # ── Миграция: tickets_json колонка ──
+    try:
+        await pool.execute("ALTER TABLE slice_participants ADD COLUMN IF NOT EXISTS tickets_json TEXT")
+        log.info("✅ Колонка tickets_json готова")
+    except Exception as e:
+        log.warning("tickets_json: %s", e)
+
     # ── Миграция: slice_type колонка ──
     try:
         await pool.execute("ALTER TABLE slices ADD COLUMN IF NOT EXISTS slice_type VARCHAR(32) NOT NULL DEFAULT 'single'")

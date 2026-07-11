@@ -458,16 +458,16 @@ const API = 'https://testappgerald-olegz2026.amvera.io';
 // ── STATE ─────────────────────────────────────
 let token    = localStorage.getItem('qt') || '';
 let dirs     = [];
-let curDir   = null;   // { id, slug, title }
-let flat     = [];     // все вопросы текущего теста
+let curDir   = null;   
+let flat     = [];    
 let qi       = 0;
-let answers  = [];     // { text, correct }
+let answers  = [];   
 let mode     = '';
 let answered = false;
-const LABELS = ['A','B','C','D','E']; // до 5 вариантов ответа
-const PASS_PERCENT = 100; // должно совпадать с PASS_PERCENT в config.py
+const LABELS = ['A','B','C','D','E']; 
+const PASS_PERCENT = 100; 
 
-// ── API ───────────────────────────────────────
+//API 
 async function api(path, opts={}){
   const h = {'Content-Type':'application/json'};
   if(token) h['Authorization']='Bearer '+token;
@@ -485,7 +485,7 @@ async function api(path, opts={}){
   return body;
 }
 
-// ── VIEWS ─────────────────────────────────────
+// VIEWS 
 function show(id){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -499,7 +499,7 @@ function tab(id, el){
   if(id==='tab-hist') loadHistory();
 }
 
-// ── AUTH ──────────────────────────────────────
+// AUTH 
 async function doLogin(){
   const raw=document.getElementById('f-tgid').value.trim();
   const pass=document.getElementById('f-pass').value;
@@ -533,7 +533,7 @@ function togglePass(){
   else{f.style.webkitTextSecurity='disc';f.style.textSecurity='disc';e.textContent='👁';}
 }
 
-// ── SECTIONS ─────────────────────────────────
+// SECTIONS 
 function toggleSection(id){
   const body=document.getElementById(id);
   const slug=id.replace('sec-','');
@@ -548,7 +548,7 @@ function openComingSoon(title){
   show('v-coming');
 }
 
-// ── HOME ──────────────────────────────────────
+// HOME 
 const ICONS={legal:'⚖️',political:'🏛',fire:'🔫',tactical:'🪖'};
 async function initHome(){
   show('v-home');
@@ -564,7 +564,7 @@ async function initHome(){
     </div>`).join('');
 }
 
-// ── DIRECTION ─────────────────────────────────
+// DIRECTION 
 async function openDir(id,slug,title){
   curDir={id,slug,title};
   document.getElementById('dir-title').textContent=title;
@@ -575,7 +575,7 @@ async function openDir(id,slug,title){
   show('v-dir');
 }
 
-// ── START MODES ───────────────────────────────
+// START MODES 
 async function startTicket(tid){
   mode='ticket';
   const qs=await api(`/api/questions/${tid}`);
@@ -609,7 +609,7 @@ async function startExam(){
   beginQuiz();
 }
 
-// ── QUIZ ──────────────────────────────────────
+// QUIZ 
 function beginQuiz(){ qi=0; answers=[]; answered=false; renderQ(); show('v-quiz'); }
 
 function renderQ(){
@@ -653,7 +653,7 @@ function pick(ans,btn){
 
 function nextQ(){ qi++; qi<flat.length ? renderQ() : showResult(); }
 
-// ── RESULT ────────────────────────────────────
+// RESULT 
 async function showResult(){
   const total=flat.length, correct=answers.filter(a=>a.correct).length;
   const pct=Math.round(correct/total*100), passed=pct>=PASS_PERCENT;
@@ -697,7 +697,7 @@ async function showResult(){
 
 function goHome(){ show('v-home'); }
 
-// ── HISTORY ───────────────────────────────────
+// HISTORY 
 const ML={ticket:'Билет',all:'Все вопросы',exam:'Экзамен'};
 async function loadHistory(){
   const el=document.getElementById('hist-list');
@@ -722,9 +722,7 @@ async function loadHistory(){
   }catch(e){el.innerHTML=`<div class="loader" style="color:var(--wrong)">${e.message}</div>`;}
 }
 
-// ══════════════════════════════════════════════
-//  СРЕЗЫ
-// ══════════════════════════════════════════════
+
 
 let sliceSession = null; // { pid, questions, answers, endsAt, timerInterval }
 
@@ -768,7 +766,7 @@ async function fillDirSelect(){
   }catch(e){ console.warn(e); }
 }
 
-// ── Создать срез ─────────────────────────────
+// Создать срез 
 async function createSlice(){
   const title   = document.getElementById('cs-title').value.trim();
   const pass    = document.getElementById('cs-pass').value.trim();
@@ -796,7 +794,7 @@ async function createSlice(){
   }catch(e){alert('Ошибка: '+e.message);}
 }
 
-// ── Войти в срез ─────────────────────────────
+// Войти в срез 
 async function joinSlice(){
   const sliceId = document.getElementById('join-id').value.trim();
   const pass    = document.getElementById('join-pass').value.trim();
@@ -808,7 +806,7 @@ async function joinSlice(){
   }catch(e){alert('Ошибка: '+e.message);}
 }
 
-// ── Запустить прохождение среза ───────────────
+// Запустить прохождение среза 
 function startSliceQuiz(sliceId, data){
   sliceSession = {
     sliceId,
@@ -895,7 +893,7 @@ async function finishSlice(){
   }
 }
 
-// ── Таймер обратного отсчёта ──────────────────
+// Таймер обратного отсчёта 
 function startSliceTimer(){
   function tick(){
     const now  = new Date();
@@ -914,7 +912,7 @@ function startSliceTimer(){
   sliceSession.timerInterval = setInterval(tick, 1000);
 }
 
-// ── Мои срезы ─────────────────────────────────
+// Мои срезы 
 async function loadMySlices(){
   const el = document.getElementById('my-slices-list');
   el.innerHTML='<div class="loader" style="height:60px;">Загрузка...</div>';
@@ -944,7 +942,7 @@ async function loadMySlices(){
   }catch(e){ el.innerHTML=`<div class="sub" style="color:var(--wrong)">${e.message}</div>`; }
 }
 
-// ── Результаты среза (для админа) ─────────────
+// Результаты среза (для админа)
 async function openSliceResults(sliceId){
   show('v-slice-admin');
   const el = document.getElementById('sa-content');
@@ -961,12 +959,12 @@ async function openSliceResults(sliceId){
       </div>
       <table class="result-table">
         <tr>
-          <th>Логин</th><th>Билет</th><th>Результат</th><th>Оценка</th>
+          <th>Логин</th><th>Билеты</th><th>Результат</th><th>Оценка</th>
         </tr>
         ${d.participants.map(p=>`
           <tr>
             <td>${p.user_login}</td>
-            <td>${p.ticket_number||'—'}</td>
+            <td style="font-size:10px;">${p.tickets_str||p.ticket_number||'—'}</td>
             <td>${p.correct}/${p.total} (${p.percent}%)</td>
             <td class="${p.passed?'grade-pass':'grade-fail'}">${p.grade}</td>
           </tr>
@@ -983,7 +981,7 @@ async function openSliceResults(sliceId){
   }catch(e){ el.innerHTML=`<div class="sub" style="color:var(--wrong)">${e.message}</div>`; }
 }
 
-// ── INIT ──────────────────────────────────────
+// INIT 
 (async()=>{
   if(!token){show('v-auth');return;}
   try{ await initHome(); }

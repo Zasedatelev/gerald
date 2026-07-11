@@ -319,15 +319,25 @@ async def join_slice(request: web.Request) -> web.Response:
 
     if slice_type == "heraldry":
         # Как режим Экзамен — по одному случайному билету из каждого направления
-        dirs = await pool.fetch("SELECT id FROM directions ORDER BY id")
+        dirs = await pool.fetch("SELECT id, title FROM directions ORDER BY id")
         all_questions = []
+        tickets_info = []   # [{direction_title, ticket_number}]
         first_ticket_id = None
         for d in dirs:
             t = await db.get_random_ticket(d["id"])
             if t:
                 if first_ticket_id is None:
                     first_ticket_id = t["id"]
+                tickets_info.append({
+                    "direction_title": d["title"],
+                    "ticket_number":   t["number"],
+                    "ticket_id":       t["id"],
+                })
                 qs = await db.get_ticket_questions(t["id"])
+                # Добавляем мета-данные к вопросам для результата
+                for q in qs:
+                    q["direction_title"] = d["title"]
+                    q["ticket_number"]   = t["number"]
                 all_questions.extend(qs)
 
         pid = await pool.fetchval("""
@@ -335,9 +345,15 @@ async def join_slice(request: web.Request) -> web.Response:
             VALUES ($1,$2,$3) RETURNING id
         """, slice_id, user["sub"], first_ticket_id)
 
+        import json as _json
+        # Сохраняем список всех билетов в отдельную запись
+        await pool.execute("""
+            UPDATE slice_participants SET tickets_json=$1 WHERE id=$2
+        """, _json.dumps(tickets_info, ensure_ascii=False), pid)
+
         return ok({
             "participant_id": pid,
-            "ticket_id":      first_ticket_id,
+            "tickets_info":   tickets_info,
             "ends_at":        slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
             "duration_min":   slc["duration_min"],
             "questions":      shuffle_answers(all_questions),
@@ -438,11 +454,14 @@ async def slice_results(request: web.Request) -> web.Response:
     participants = await pool.fetch("""
         SELECT sp.id, sp.user_id, sp.ticket_id, sp.correct, sp.total,
                sp.started_at, sp.finished_at,
+               sp.tickets_json,
                u.telegram_id,
-               t.number AS ticket_number
+               t.number AS ticket_number,
+               d.title  AS direction_title
         FROM slice_participants sp
         JOIN users u   ON u.id  = sp.user_id
-        LEFT JOIN tickets t ON t.id = sp.ticket_id
+        LEFT JOIN tickets    t ON t.id = sp.ticket_id
+        LEFT JOIN directions d ON d.id = t.direction_id
         WHERE sp.slice_id = $1
         ORDER BY sp.finished_at NULLS LAST
     """, slice_id)
@@ -461,9 +480,30 @@ async def slice_results(request: web.Request) -> web.Response:
         pct    = round(p["correct"] / p["total"] * 100) if p["total"] else 0
         passed = pct >= slc["pass_percent"]
 
+        # Для геральдики берём список всех билетов из JSON
+        import json as _json
+        tickets_info = []
+        if p["tickets_json"]:
+            try:
+                tickets_info = _json.loads(p["tickets_json"])
+            except Exception:
+                pass
+
+        # Формируем строку с билетами для отображения
+        if tickets_info:
+            tickets_str = ", ".join(
+                f"{t['direction_title']} (билет {t['ticket_number']})"
+                for t in tickets_info
+            )
+        else:
+            dir_title = p["direction_title"] or "—"
+            tkt_num   = p["ticket_number"] or "—"
+            tickets_str = f"{dir_title} (билет {tkt_num})"
+
         results.append({
             "user_login":    str(p["telegram_id"]),
-            "ticket_number": p["ticket_number"],
+            "tickets_str":   tickets_str,
+            "tickets_info":  tickets_info,
             "correct":       p["correct"],
             "total":         p["total"],
             "percent":       pct,
