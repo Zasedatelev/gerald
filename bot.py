@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 router = Router()
 
 
+# ── /start ────────────────────────────────────
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
@@ -61,6 +62,7 @@ async def cmd_help(message: Message) -> None:
     )
 
 
+# ── Запуск ────────────────────────────────────
 
 async def main():
     # ── Лог переменных при старте ──
@@ -72,6 +74,7 @@ async def main():
     await db.create_pool()
     log.info("DB pool ready")
 
+    # ── Автоматическое применение схемы БД ──
     import pathlib
     schema_file = pathlib.Path("/app/schema.sql")
     if schema_file.exists():
@@ -83,6 +86,7 @@ async def main():
         except Exception as e:
             log.warning("Схема уже применена или ошибка: %s", e)
 
+    # ── Применяем миграции по одной таблице ──
     import pathlib
     pool = await db.get_pool()
     migrations = [
@@ -97,6 +101,14 @@ async def main():
         except Exception as e:
             log.warning("Таблица %s: %s", table_name, e)
 
+    # ── Миграция: slice_type колонка ──
+    try:
+        await pool.execute("ALTER TABLE slices ADD COLUMN IF NOT EXISTS slice_type VARCHAR(32) NOT NULL DEFAULT 'single'")
+        log.info("✅ Колонка slice_type готова")
+    except Exception as e:
+        log.warning("slice_type: %s", e)
+
+    # ── Автозаполнение направлений ──
     pool = await db.get_pool()
     count = await pool.fetchval("SELECT COUNT(*) FROM directions")
     if count == 0:

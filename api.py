@@ -255,12 +255,15 @@ async def create_slice(request: web.Request) -> web.Response:
 
     title        = body.get("title", "").strip()
     password     = body.get("password", "").strip()
-    direction_id = body.get("direction_id")
+    direction_id = body.get("direction_id")   # None для геральдики (exam-режим)
+    slice_type   = body.get("slice_type", "single")  # "single" | "heraldry" | "coming_soon"
     pass_percent = int(body.get("pass_percent", 60))
     duration_min = int(body.get("duration_min", 30))
 
-    if not title or not password or not direction_id:
-        return err(400, "title, password и direction_id обязательны")
+    if not title or not password:
+        return err(400, "title и password обязательны")
+    if slice_type == "single" and not direction_id:
+        return err(400, "direction_id обязателен для одиночного направления")
     if duration_min < 1 or duration_min > 180:
         return err(400, "Длительность от 1 до 180 минут")
 
@@ -268,9 +271,9 @@ async def create_slice(request: web.Request) -> web.Response:
 
     pool = await db.get_pool()
     slice_id = await pool.fetchval("""
-        INSERT INTO slices (admin_id, direction_id, title, password, pass_percent, duration_min, ends_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
-    """, user["sub"], direction_id, title, password, pass_percent, duration_min, ends_at)
+        INSERT INTO slices (admin_id, direction_id, title, password, pass_percent, duration_min, ends_at, slice_type)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
+    """, user["sub"], direction_id, title, password, pass_percent, duration_min, ends_at, slice_type)
 
     return ok({"slice_id": slice_id, "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M:%SZ")})
 
@@ -309,7 +312,39 @@ async def join_slice(request: web.Request) -> web.Response:
             "questions":      shuffle_answers(qs),
         })
 
-    # Выдаём случайный билет
+    slice_type = slc.get("slice_type", "single")
+
+    if slice_type == "coming_soon":
+        return err(400, "Этот раздел пока недоступен")
+
+    if slice_type == "heraldry":
+        # Как режим Экзамен — по одному случайному билету из каждого направления
+        dirs = await pool.fetch("SELECT id FROM directions ORDER BY id")
+        all_questions = []
+        first_ticket_id = None
+        for d in dirs:
+            t = await db.get_random_ticket(d["id"])
+            if t:
+                if first_ticket_id is None:
+                    first_ticket_id = t["id"]
+                qs = await db.get_ticket_questions(t["id"])
+                all_questions.extend(qs)
+
+        pid = await pool.fetchval("""
+            INSERT INTO slice_participants (slice_id, user_id, ticket_id)
+            VALUES ($1,$2,$3) RETURNING id
+        """, slice_id, user["sub"], first_ticket_id)
+
+        return ok({
+            "participant_id": pid,
+            "ticket_id":      first_ticket_id,
+            "ends_at":        slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "duration_min":   slc["duration_min"],
+            "questions":      shuffle_answers(all_questions),
+            "slice_type":     "heraldry",
+        })
+
+    # single — случайный билет из одного направления
     ticket = await db.get_random_ticket(slc["direction_id"])
     if not ticket:
         return err(500, "Нет билетов для этого направления")
@@ -326,6 +361,7 @@ async def join_slice(request: web.Request) -> web.Response:
         "ends_at":        slc["ends_at"].strftime("%Y-%m-%dT%H:%M:%SZ"),
         "duration_min":   slc["duration_min"],
         "questions":      shuffle_answers(qs),
+        "slice_type":     "single",
     })
 
 
@@ -454,6 +490,7 @@ async def my_slices(request: web.Request) -> web.Response:
     pool = await db.get_pool()
     rows = await pool.fetch("""
         SELECT s.id, s.title, s.ends_at, s.pass_percent, s.duration_min,
+               s.slice_type,
                d.title AS direction_title,
                COUNT(sp.id) AS participant_count
         FROM slices s

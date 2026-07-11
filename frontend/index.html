@@ -299,8 +299,11 @@ h1 span{color:var(--accent);}
       <div class="card-title">➕ Создать срез</div>
       <input class="field" id="cs-title"    type="text"   placeholder="Название среза" style="margin-bottom:8px;"/>
       <input class="field" id="cs-pass"     type="text"   placeholder="Пароль для участников" style="margin-bottom:8px;"/>
-      <select class="field" id="cs-dir" style="margin-bottom:8px;background:var(--surface);cursor:pointer;">
-        <option value="">Выберите направление...</option>
+      <select class="field" id="cs-section" style="margin-bottom:8px;background:var(--surface);cursor:pointer;">
+        <option value="">Выберите раздел...</option>
+        <option value="heraldry">🏅 Геральдический знак I степени</option>
+        <option value="height">🪂 Высотная/Десантная подготовка</option>
+        <option value="topo">🗺️ Топографическая подготовка</option>
       </select>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         <div style="flex:1;">
@@ -767,25 +770,29 @@ async function fillDirSelect(){
 
 // ── Создать срез ─────────────────────────────
 async function createSlice(){
-  await fillDirSelect();
   const title   = document.getElementById('cs-title').value.trim();
   const pass    = document.getElementById('cs-pass').value.trim();
-  const dirId   = document.getElementById('cs-dir').value;
+  const section = document.getElementById('cs-section').value;
   const pct     = document.getElementById('cs-pass-pct').value;
   const dur     = document.getElementById('cs-duration').value;
-  if(!title||!pass||!dirId){alert('Заполните все поля');return;}
+  if(!title||!pass||!section){alert('Заполните все поля и выберите раздел');return;}
+
+  const SECTION_MAP = {
+    heraldry: {slice_type:'heraldry',   direction_id:null, label:'Геральдический знак I степени'},
+    height:   {slice_type:'coming_soon',direction_id:null, label:'Высотная/Десантная подготовка'},
+    topo:     {slice_type:'coming_soon',direction_id:null, label:'Топографическая подготовка'},
+  };
+  const {slice_type, direction_id, label} = SECTION_MAP[section];
+
   try{
     const d = await api('/api/slices',{method:'POST',body:JSON.stringify({
-      title, password:pass, direction_id:+dirId,
+      title, password:pass, slice_type, direction_id,
       pass_percent:+pct, duration_min:+dur
     })});
-    alert(`✅ Срез создан!
-
-ID среза: ${d.slice_id}
-Поделитесь ID и паролем с участниками`);
+    alert(`✅ Срез создан!\n\nРаздел: ${label}\nID среза: ${d.slice_id}\n\nПоделитесь ID и паролем с участниками`);
     loadMySlices();
-    // Очищаем форму
     ['cs-title','cs-pass'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('cs-section').value='';
   }catch(e){alert('Ошибка: '+e.message);}
 }
 
@@ -909,7 +916,6 @@ function startSliceTimer(){
 
 // ── Мои срезы ─────────────────────────────────
 async function loadMySlices(){
-  await fillDirSelect();
   const el = document.getElementById('my-slices-list');
   el.innerHTML='<div class="loader" style="height:60px;">Загрузка...</div>';
   try{
@@ -922,12 +928,14 @@ async function loadMySlices(){
       const badge  = active
         ? '<span class="slice-badge active">Активен</span>'
         : '<span class="slice-badge closed">Завершён</span>';
+      const SECTION_LABELS = {heraldry:'🏅 Геральдика',coming_soon:'🚧 Скоро',single:'📋 Направление'};
+      const secLabel = SECTION_LABELS[r.slice_type||'single'] || r.direction_title || '—';
       return `<div class="slice-card">
         <div class="slice-header">
           <div class="slice-title">${r.title}</div>${badge}
         </div>
         <div class="slice-meta">
-          ${r.direction_title||'—'} · ${r.participant_count} участников · ${r.pass_percent}% проходной
+          ${secLabel} · ${r.participant_count} уч. · ${r.pass_percent}% проходной
         </div>
         <button class="btn btn-o" style="margin-top:10px;padding:9px;"
           onclick="openSliceResults(${r.id})">📊 Результаты</button>
